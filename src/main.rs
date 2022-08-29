@@ -5,11 +5,15 @@ use rand::*;
 use bevy::{prelude::*, time::FixedTimestep, sprite::collide_aabb::collide};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
-const BACKGROUND_COLOR: Color = Color::MIDNIGHT_BLUE;
 
 // window 
 const WINDOW_WIDTH: f32 = 920.;
 const WINDOW_HEIGHT: f32 = 920.;
+
+// background
+const BACKGROUND_COLOR: Color = Color::rgb(0.2, 0.2, 0.7);
+const BACKGROUND_FONT_COLOR: Color = Color::rgb(1.0, 1.0, 1.0);
+const BACKGROUND_FONT_SIZE: f32 = 30.0;
 
 // scoreboard
 const SCORE_COLOR: Color = Color::rgb(1.0, 1.0, 1.0);
@@ -27,11 +31,11 @@ const RIGHT_WALL: f32 = WINDOW_WIDTH / 2.;
 const WALL_THICKNESS: f32 = 10.;
 
 // ship 
-const SHIP_SIZE: Vec2 = Vec2::new(60., 40.);
-const SHIP_BULLET_COLOR: Color = Color::rgb(0.9, 0.0, 0.0);
+const SHIP_SIZE: Vec2 = Vec2::new(90., 60.);
 const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 5.0;
 const SHIP_SPEED: f32 = 450.;
 const SHOOTING_COOLDOWN_IN_SECONDS: f32 = 0.8;
+const SHIP_BULLET_SIZE: Vec2 = Vec2::new(20.0, 20.0);
 
 // bullet 
 const BULLET_SIZE: Vec2 = Vec2::new(7.0, 20.0);
@@ -60,6 +64,9 @@ enum GameState {
     Playing,
     GameOver,
 }
+
+#[derive(Component)]
+struct Background;
 
 struct Scoreboard { score: u32, }
 
@@ -117,6 +124,25 @@ impl Animations {
     }
 }
 
+
+struct Sprites {
+    sprites: HashMap<String, Handle<Image>>
+}
+
+impl Sprites {
+    pub fn new() -> Self {
+        Sprites {
+            sprites: HashMap::default()
+        }
+    }
+    pub fn add(&mut self, sprite_name: String, sprite: Handle<Image>) {
+        self.sprites.insert(sprite_name, sprite);
+    }
+    pub fn get(&self, sprite_name: String) -> Option<&Handle<Image>> {
+        self.sprites.get(&sprite_name)
+    }
+}
+
 fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
@@ -127,6 +153,7 @@ fn main() {
             ..default()
         })
         .insert_resource(Animations::new())
+        .insert_resource(Sprites::new())
         .add_plugins(DefaultPlugins)
         .add_plugin(AnimationPlugin::default())
         .insert_resource(ClearColor(BACKGROUND_COLOR))
@@ -190,16 +217,17 @@ impl BulletBundle {
         }
     }
 
-    fn from_ship(translation: Vec2) -> BulletBundle {
+    fn from_ship(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
         BulletBundle {
             sprite_bundle: SpriteBundle {
+                texture: sprite,
                 transform: Transform {
                     translation: translation.extend(0.0),
-                    scale: BULLET_SIZE.extend(1.0),
+                    scale: Vec3::ONE,
                     ..default()
                 },
                 sprite: Sprite {
-                    color: SHIP_BULLET_COLOR,
+                    custom_size: Some(SHIP_BULLET_SIZE),
                     ..default()
                 },
                 ..default()
@@ -264,7 +292,8 @@ fn setup(
     mut commands: Commands, 
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
-    mut animations: ResMut<Animations>
+    mut animations: ResMut<Animations>,
+    mut sprites: ResMut<Sprites>
 ) {
     commands.spawn_bundle(Camera2dBundle::default());
 
@@ -276,13 +305,13 @@ fn setup(
                 TextStyle {
                     font_size: SCOREBOARD_FONT_SIZE,
                     color: SCORE_COLOR,
-                    font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 },
             ),
             TextSection::from_style(TextStyle {
                 font_size: SCOREBOARD_FONT_SIZE,
                 color: SCORE_COLOR,
-                font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
             }),
         ]) 
         .with_style(Style {
@@ -296,7 +325,44 @@ fn setup(
         }),
     );
 
-    let ship_y = BOTTOM_WALL + GAP_BETWEEN_SHIP_AND_FLOOR + SHIP_SIZE.y / 2.;
+    // background
+    commands
+        .spawn()
+        .insert_bundle(
+            TextBundle::from_sections([
+                TextSection::new(
+                    "DEFEAT THE BORROW CHECKER",
+                    TextStyle {
+                        font_size: BACKGROUND_FONT_SIZE,
+                        color: BACKGROUND_FONT_COLOR,
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    },
+                ),
+            ]) 
+            .with_text_alignment(TextAlignment::CENTER)
+            .with_style(Style {
+                align_self: AlignSelf::Center,
+                justify_content: JustifyContent::Center,
+                position_type: PositionType::Absolute,
+                position: UiRect {
+                    top: Val::Px(5.0),
+                    right: Val::Px(0.0),
+                    ..default()
+                },
+                ..default()
+            }),
+        )
+        .insert(Background);
+        // .with_style(Style {
+        //     position_type: PositionType::Relative,
+        //     position: UiRect {
+        //         top: SCOREBOARD_PADDING_TOP, 
+        //         left: SCOREBOARD_PADDING_LEFT,
+        //         ..default()
+        //     },
+        //     ..default()
+        // }),
+
 
     // animations
     let explosion_atlas = TextureAtlas::from_grid(
@@ -315,7 +381,9 @@ fn setup(
 
     animations.add("EXPLOSION".to_string(), explosion_animation);
 
-    // bullet
+    // ship 
+    let ship_y = BOTTOM_WALL + GAP_BETWEEN_SHIP_AND_FLOOR + SHIP_SIZE.y / 2.;
+
     commands
         .spawn()
         .insert(Ship)
@@ -379,6 +447,9 @@ fn setup(
     commands.spawn().insert_bundle(WallBundle::new(WallLocation::Right));
     commands.spawn().insert_bundle(WallBundle::new(WallLocation::Top));
     commands.spawn().insert_bundle(WallBundle::new(WallLocation::Bottom));
+
+    // bullets
+    sprites.add("FERRIS_BULLET".to_string(), asset_server.load("images/rust.png"))
 }
 
 fn update_explosions(
@@ -526,7 +597,7 @@ fn update_aliens(
     } 
 }
 
-fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
+fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text, Without<Background>>) {
     let mut score_text = query.single_mut();
     score_text.sections[1].value = scoreboard.score.to_string();
 }
@@ -534,6 +605,7 @@ fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
 fn update_ship(
     keyboard_input: Res<Input<KeyCode>>, 
     mut query: Query<(Entity, &mut Transform, Option<&mut ShootingCooldown>), With<Ship>>, 
+    sprites: Res<Sprites>,
     mut commands: Commands
 ) {
     let (ship, mut transform, mut shooting_cooldown) = query.single_mut(); 
@@ -579,7 +651,10 @@ fn update_ship(
 
         commands
             .spawn()
-            .insert_bundle(BulletBundle::from_ship(Vec2::new(bullet_x, bullet_y)));
+            .insert_bundle(BulletBundle::from_ship(
+                Vec2::new(bullet_x, bullet_y), 
+                sprites.get("FERRIS_BULLET".to_string()).unwrap().clone()
+            ));
     }
 }
 
