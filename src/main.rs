@@ -1,16 +1,18 @@
-use std::time::Duration;
+use std::{time::Duration, collections::HashMap};
+use benimator::FrameRate;
+use rand::*;
 
 use bevy::{prelude::*, time::FixedTimestep, sprite::collide_aabb::collide};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
-const BACKGROUND_COLOR: Color = Color::BEIGE;
+const BACKGROUND_COLOR: Color = Color::MIDNIGHT_BLUE;
 
 // window 
 const WINDOW_WIDTH: f32 = 920.;
 const WINDOW_HEIGHT: f32 = 920.;
 
 // scoreboard
-const SCORE_COLOR: Color = Color::rgb(0.0, 0.0, 0.0);
+const SCORE_COLOR: Color = Color::rgb(1.0, 1.0, 1.0);
 const SCOREBOARD_FONT_SIZE: f32 = 30.0;
 const SCOREBOARD_PADDING_TOP: Val = Val::Px(8.0);
 const SCOREBOARD_PADDING_LEFT: Val = Val::Px(10.0);
@@ -22,29 +24,42 @@ const TOP_WALL: f32 = WINDOW_HEIGHT / 2.;
 const LEFT_WALL: f32 = -WINDOW_WIDTH / 2.;
 const RIGHT_WALL: f32 = WINDOW_WIDTH / 2.;
 
-const WALL_THICKNESS: f32 = 20.;
+const WALL_THICKNESS: f32 = 10.;
 
-// player
-const SHIP_COLOR: Color = Color::rgb(0.1, 0.1, 0.1);
-const SHIP_SIZE: Vec2 = Vec2::new(80., 20.);
-const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 20.;
-const SHIP_SPEED: f32 = 200.;
-
-// bullet 
-const BULLET_COLOR: Color = Color::rgb(0.9, 0.0, 0.0);
-const BULLET_SIZE: Vec2 = Vec2::new(7.0, 20.0);
-const BULLET_SPEED: f32 = 600.;
-const SHIP_BULLET_INITIAL_GAP: f32 = 10.;
+// ship 
+const SHIP_SIZE: Vec2 = Vec2::new(60., 40.);
+const SHIP_BULLET_COLOR: Color = Color::rgb(0.9, 0.0, 0.0);
+const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 5.0;
+const SHIP_SPEED: f32 = 450.;
 const SHOOTING_COOLDOWN_IN_SECONDS: f32 = 0.8;
 
+// bullet 
+const BULLET_SIZE: Vec2 = Vec2::new(7.0, 20.0);
+const SHIP_BULLET_SPEED: f32 = 600.;
+const SHIP_BULLET_INITIAL_GAP: f32 = 10.;
+
 // alien
+const ALIEN_BULLET_COLOR: Color = Color::rgb(0.0, 0.9, 0.0);
+const ALIEN_ODD_ROW_OFFSET: f32 = 30.0;
 const ALIEN_COLOR: Color = Color::rgb(0.0, 0.8, 0.0);
 const ALIEN_WALL_GAP: f32 = 20.;
-const ALIEN_SIZE: Vec2 = Vec2::new(60., 20.);
+const ALIEN_SIZE: Vec2 = Vec2::new(40., 20.);
 const ALIEN_SPEED: f32 = 125.;
 const ALIEN_ALIEN_GAP: Vec2 = Vec2::new(30., 50.);
+const ALIEN_BULLET_SPEED: f32 = 400.0;
 const INITIAL_ALIEN_DIRECTION: f32 = 1.; // right
 const DESTROY_ALIEN_SCORE: u32 = 5;
+const MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.;
+
+// explosion
+const EXPLOSION_SIZE: f32 = 0.3;
+const EXPLOSION_FRAME_DURATION_IN_MILLIS: u64 = 20;
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+enum GameState {
+    Playing,
+    GameOver,
+}
 
 struct Scoreboard { score: u32, }
 
@@ -57,14 +72,50 @@ struct ShootingCooldown(Timer);
 #[derive(Component)]
 struct Ship;
 
-#[derive(Component)]
-struct Bullet;
+#[derive(Component, PartialEq)]
+enum Bullet {
+    Ship,
+    Alien
+}
 
 #[derive(Component)]
 struct Alien;
 
 #[derive(Component, Deref, DerefMut)]
 struct Velocity(Vec2);
+
+#[derive(Component)]
+struct Explosion;
+
+#[derive(Default, Component, Deref, DerefMut)]
+struct AnimationState(benimator::State);
+
+#[derive(Component, Deref, Clone)]
+struct BAnimation(benimator::Animation);
+
+// TODO: use readonly public crate
+struct Animation {
+    pub animation: BAnimation,
+    pub texture_atlas: Handle<TextureAtlas>   
+}
+
+struct Animations {
+    animations: HashMap<String, Animation>
+}
+
+impl Animations {
+    pub fn new() -> Self {
+        Animations {
+            animations: HashMap::default()
+        }
+    }
+    pub fn add(&mut self, animation_name: String, animation: Animation) {
+        self.animations.insert(animation_name, animation);
+    }
+    pub fn get(&self, animation_name: String) -> Option<&Animation> {
+        self.animations.get(&animation_name)
+    }
+}
 
 fn main() {
     App::new()
@@ -75,23 +126,28 @@ fn main() {
             resizable: false,
             ..default()
         })
+        .insert_resource(Animations::new())
         .add_plugins(DefaultPlugins)
+        .add_plugin(AnimationPlugin::default())
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(Scoreboard { score: 0 })
         .add_startup_system(setup)
-        // .add_event::<CollisionEvent>()
+        .add_state(GameState::Playing)
         .add_system_set(
-            SystemSet::new()
+            SystemSet::on_update(GameState::Playing)
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-                .with_system(update_ship)
+                .with_system(update_ship.before(update_bullets))
+                .with_system(update_aliens.before(update_bullets))
                 .with_system(update_bullets)
-                .with_system(move_aliens)
-                .with_system(check_for_alien_collisions)
-                // .with_system(move_paddle.before(check_for_collisions))
-                // .with_system(apply_velocity.before(check_for_collisions))
-                // .with_system(check_for_collisions)
+                .with_system(check_for_alien_collisions.after(update_bullets))
+                .with_system(check_gameover.after(check_for_alien_collisions))
+        )
+        .add_system_set(
+            SystemSet::on_enter(GameState::GameOver)
+                .with_system(play_gameover)
         )
         .add_system(update_scoreboard)
+        .add_system(update_explosions)
         .add_system(bevy::window::close_on_esc)
         .run();
 }
@@ -101,6 +157,58 @@ struct WallBundle {
     #[bundle]
     sprite_bundle: SpriteBundle,
     collider: Collider,
+}
+
+
+#[derive(Bundle)]
+struct BulletBundle {
+    #[bundle]
+    sprite_bundle: SpriteBundle,
+    bullet: Bullet,
+    collider: Collider,
+    velocity: Velocity
+}
+
+impl BulletBundle {
+    fn from_alien(translation: Vec2) -> BulletBundle {
+        BulletBundle {
+            sprite_bundle: SpriteBundle {
+                transform: Transform {
+                    translation: translation.extend(0.0),
+                    scale: BULLET_SIZE.extend(1.0),
+                    ..default()
+                },
+                sprite: Sprite {
+                    color: ALIEN_BULLET_COLOR,
+                    ..default()
+                },
+                ..default()
+            },
+            velocity: Velocity(Vec2::new(0.0, -ALIEN_BULLET_SPEED)),
+            bullet: Bullet::Alien,
+            collider: Collider,
+        }
+    }
+
+    fn from_ship(translation: Vec2) -> BulletBundle {
+        BulletBundle {
+            sprite_bundle: SpriteBundle {
+                transform: Transform {
+                    translation: translation.extend(0.0),
+                    scale: BULLET_SIZE.extend(1.0),
+                    ..default()
+                },
+                sprite: Sprite {
+                    color: SHIP_BULLET_COLOR,
+                    ..default()
+                },
+                ..default()
+            },
+            velocity: Velocity(Vec2::new(0.0, SHIP_BULLET_SPEED)),
+            bullet: Bullet::Ship,
+            collider: Collider,
+        }
+    }
 }
 
 enum WallLocation {
@@ -152,7 +260,12 @@ impl WallBundle {
     }
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(
+    mut commands: Commands, 
+    asset_server: Res<AssetServer>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
+    mut animations: ResMut<Animations>
+) {
     commands.spawn_bundle(Camera2dBundle::default());
 
      // spawn scoreboard
@@ -185,20 +298,38 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let ship_y = BOTTOM_WALL + GAP_BETWEEN_SHIP_AND_FLOOR + SHIP_SIZE.y / 2.;
 
-    // spawn player
+    // animations
+    let explosion_atlas = TextureAtlas::from_grid(
+        asset_server.load("images/explosion_sheet.png"),
+        Vec2::new(100.0, 100.0),
+        5, // columns
+        5, // rows
+    );
+    let explosion_animation = Animation {
+        animation: BAnimation(benimator::Animation::from_indices(
+            0..25,
+            FrameRate::from_frame_duration(Duration::from_millis(EXPLOSION_FRAME_DURATION_IN_MILLIS)),
+        )),
+        texture_atlas: texture_atlases.add(explosion_atlas)
+    };
+
+    animations.add("EXPLOSION".to_string(), explosion_animation);
+
+    // bullet
     commands
         .spawn()
         .insert(Ship)
         .insert_bundle(SpriteBundle {
-            sprite: Sprite {
-                color: SHIP_COLOR,
-                ..default()
-            }, 
             transform: Transform {
                 translation: Vec3::new(0.0, ship_y, 0.0),
-                scale: SHIP_SIZE.extend(1.),
+                scale: Vec3::ONE, // SHIP_SIZE.extend(1.),
                 ..default()
             },
+            sprite: Sprite {
+                custom_size: Some(SHIP_SIZE),
+                ..default() 
+            },
+            texture: asset_server.load("images/ferris.png"),
             ..default()
         })
         .insert(Collider);
@@ -208,12 +339,20 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let total_alien_width = ALIEN_SIZE.x + ALIEN_ALIEN_GAP.x;
     let total_alien_height = ALIEN_SIZE.y + ALIEN_ALIEN_GAP.y;
-    
+
     // spawn aliens
     for row in 0..5 {
-        for col in 0..5 {
-            let alien_x = first_alien_x + col as f32 * total_alien_width; 
+        for col in 0..(5 + row % 2) {
             let alien_y = first_alien_y - row as f32 * total_alien_height; 
+
+            let alien_x;
+
+            if row % 2 == 0 { 
+                alien_x = first_alien_x + col as f32 * total_alien_width; 
+            } else {
+                alien_x = first_alien_x + col as f32 * total_alien_width - ALIEN_ODD_ROW_OFFSET; 
+            }
+            
             commands
                 .spawn()
                 .insert(Alien)
@@ -229,6 +368,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                     },
                     ..default()
                 })
+                .insert(ShootingCooldown(Timer::from_seconds(random::<f32>() * MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS, false)))
                 .insert(Velocity(Vec2::new(ALIEN_SPEED * INITIAL_ALIEN_DIRECTION, 0.0)))
                 .insert(Collider);
         }
@@ -239,27 +379,107 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn().insert_bundle(WallBundle::new(WallLocation::Right));
     commands.spawn().insert_bundle(WallBundle::new(WallLocation::Top));
     commands.spawn().insert_bundle(WallBundle::new(WallLocation::Bottom));
+}
 
-   
+fn update_explosions(
+    mut query: Query<(Entity, &mut AnimationState, &mut TextureAtlasSprite, &BAnimation), With<Explosion>>,
+    mut commands: Commands
+) {
+    for (explosion_entity, mut animation_state, mut texture_atlas, explosion_animation) in query.iter_mut() {
+        if animation_state.frame_index() == 24 {
+            // TODO: .is_ended() _should_ work?!
+            // if animation_state.is_ended() {
+            commands.entity(explosion_entity).despawn();
+        }
+        animation_state.update(explosion_animation, Duration::from_secs_f32(TIME_STEP));
+        texture_atlas.index = animation_state.frame_index();
+    }
+}
+
+fn check_gameover(
+    alien_query: Query<&Transform, With<Alien>>, 
+    bullet_query: Query<(&Transform, &Bullet)>,
+    ship_query: Query<&Transform, With<Ship>>,
+    mut game_state: ResMut<State<GameState>>
+) {
+    if game_state.current() == &GameState::GameOver {
+        return;
+    }
+
+    if alien_query.is_empty() {
+        game_state.set(GameState::GameOver).unwrap(); 
+        return;
+    }
+
+    let ship_transform = ship_query.single();
+
+    for alien_transform in &alien_query {
+        if alien_transform.translation.y < ship_transform.translation.y {
+            game_state.set(GameState::GameOver).unwrap(); 
+            return;
+        }
+    }
+
+    for (bullet_transform, bullet) in &bullet_query {
+        if bullet == &Bullet::Ship {
+            // ignore bullets from the ship 
+            continue;
+        }
+        if let Some(_collision) = collide(
+            ship_transform.translation,
+            ship_transform.scale.truncate(),
+            bullet_transform.translation,
+            bullet_transform.scale.truncate(),
+        ) {
+            game_state.set(GameState::GameOver).unwrap(); 
+            break;
+        } 
+    }
+}
+
+fn play_gameover() {
+    println!("Game Over!")
 }
 
 fn check_for_alien_collisions(
     mut scoreboard: ResMut<Scoreboard>,
     alien_query: Query<(Entity, &Transform), With<Alien>>, 
-    bullet_query: Query<(Entity, &Transform), With<Bullet>>,
+    bullet_query: Query<(Entity, &Bullet, &Transform)>,
+    animations: Res<Animations>,
     mut commands: Commands,
 ) {
-
-    for (alien, transform) in &alien_query {
-        for (bullet, bullet_transform) in &bullet_query {
+    for (alien_entity, transform) in &alien_query {
+        for (bullet_entity, bullet, bullet_transform) in &bullet_query {
+            if bullet == &Bullet::Alien {
+                // ignore bullets from other aliens
+                continue;
+            }
             if let Some(_collision) = collide(
                 transform.translation,
                 transform.scale.truncate(),
                 bullet_transform.translation,
                 bullet_transform.scale.truncate(),
             ) {
-                commands.entity(bullet).despawn();
-                commands.entity(alien).despawn();
+                commands.entity(bullet_entity).despawn();
+                commands.entity(alien_entity).despawn();
+
+                let explosion = animations.get("EXPLOSION".to_string()).unwrap();
+
+                commands
+                    .spawn()
+                    .insert_bundle(SpriteSheetBundle {
+                        texture_atlas: explosion.texture_atlas.clone(),
+                        transform: Transform {
+                            translation: bullet_transform.translation,
+                            scale: Vec3::splat(EXPLOSION_SIZE),
+                            ..default()
+                        },
+                        ..default()
+                    })
+                    .insert(explosion.animation.clone())
+                    .insert(AnimationState::default())
+                    .insert(Explosion);
+                    
 
                 scoreboard.score += DESTROY_ALIEN_SCORE;
                 break;
@@ -268,10 +488,13 @@ fn check_for_alien_collisions(
     }
 }
 
-fn move_aliens(mut alien_query: Query<(&mut Transform, &mut Velocity), With<Alien>>) {
+fn update_aliens(
+    mut alien_query: Query<(&mut Transform, &mut Velocity, &mut ShootingCooldown), With<Alien>>,
+    mut commands: Commands
+) {
     let alien_forward_shift = ALIEN_ALIEN_GAP.y / 2. + ALIEN_SIZE.y / 2.;
 
-    for (mut transform, mut velocity) in &mut alien_query {
+    for (mut transform, mut velocity, mut shooting_cooldown) in &mut alien_query {
         transform.translation.x += velocity.x * TIME_STEP;
         transform.translation.y += velocity.y * TIME_STEP;
 
@@ -283,6 +506,22 @@ fn move_aliens(mut alien_query: Query<(&mut Transform, &mut Velocity), With<Alie
         if right_most_side < LEFT_WALL || left_most_side > RIGHT_WALL {
             velocity.x *= -1.;
             transform.translation.y -= alien_forward_shift;
+        }
+
+        // update cooldown timer
+        if shooting_cooldown.finished() {
+
+            let bullet_x = transform.translation.x;
+            let bullet_y = transform.translation.y - SHIP_BULLET_INITIAL_GAP;
+
+            commands
+                .spawn()
+                .insert_bundle(BulletBundle::from_alien(Vec2::new(bullet_x, bullet_y)));
+
+            shooting_cooldown.reset();
+            shooting_cooldown.set_duration(Duration::from_secs_f32(random::<f32>() * MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS))
+        } else {
+            shooting_cooldown.tick(Duration::from_secs_f32(TIME_STEP));
         }
     } 
 }
@@ -323,7 +562,15 @@ fn update_ship(
     }
 
     if shoot && shooting_cooldown.is_none() {
-        let bullet_x = transform.translation.x;
+        let bullet_x;
+        
+        // randomly shoot from left or right extent
+        if random::<f32>() < 0.5 {
+            bullet_x = transform.translation.x + SHIP_SIZE.x / 2.;
+        } else {
+            bullet_x = transform.translation.x - SHIP_SIZE.x / 2.;
+        } 
+
         let bullet_y = transform.translation.y + transform.scale.y / 2. + SHIP_BULLET_INITIAL_GAP;
 
         commands
@@ -332,21 +579,7 @@ fn update_ship(
 
         commands
             .spawn()
-            .insert(Bullet)
-            .insert_bundle(SpriteBundle {
-                sprite: Sprite {
-                    color: BULLET_COLOR,
-                    ..default()
-                },
-                transform: Transform {
-                    translation: Vec3::new(bullet_x, bullet_y, 0.),
-                    scale: BULLET_SIZE.extend(1.),
-                    ..default()
-                },
-                ..default()
-            })
-            .insert(Velocity(Vec2::new(0., BULLET_SPEED)))
-            .insert(Collider);
+            .insert_bundle(BulletBundle::from_ship(Vec2::new(bullet_x, bullet_y)));
     }
 }
 
