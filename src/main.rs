@@ -5,15 +5,16 @@ use rand::*;
 use bevy::{prelude::*, time::FixedTimestep, sprite::collide_aabb::collide};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
+const CAMERA_LEVEL: f32 = 1.0;
 
 // window 
 const WINDOW_WIDTH: f32 = 920.;
 const WINDOW_HEIGHT: f32 = 920.;
 
 // background
-const BACKGROUND_COLOR: Color = Color::rgb(0.2, 0.2, 0.7);
 const BACKGROUND_FONT_COLOR: Color = Color::rgb(1.0, 1.0, 1.0);
 const BACKGROUND_FONT_SIZE: f32 = 30.0;
+const BACKGROUND_LEVEL: f32 = -1.0;
 
 // scoreboard
 const SCORE_COLOR: Color = Color::rgb(1.0, 1.0, 1.0);
@@ -31,22 +32,25 @@ const RIGHT_WALL: f32 = WINDOW_WIDTH / 2.;
 const WALL_THICKNESS: f32 = 10.;
 
 // ship 
+const SHIP_BULLET_IMAGE_SIZE: Vec2 = Vec2::new(512.0, 512.0);
+const SHIP_IMAGE_SIZE: Vec2 = Vec2::new(1200.0, 800.0);
 const SHIP_SIZE: Vec2 = Vec2::new(120., 80.);
 const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 5.0;
 const SHIP_SPEED: f32 = 450.;
 const SHOOTING_COOLDOWN_IN_SECONDS: f32 = 0.8;
-const SHIP_BULLET_SIZE: Vec2 = Vec2::new(20.0, 20.0);
+const SHIP_BULLET_SIZE: Vec2 = Vec2::new(40.0, 40.0);
 
 // bullet 
 const BULLET_SIZE: Vec2 = Vec2::new(4.0, 15.0);
-const SHIP_BULLET_SPEED: f32 = 600.;
-const SHIP_BULLET_INITIAL_GAP: f32 = 10.;
+const SHIP_BULLET_SPEED: f32 = 450.0;
+const SHIP_BULLET_INITIAL_GAP: f32 = 5.;
 
 // alien
+const ALIEN_IMAGE_SIZE: Vec2 = Vec2::new(1200.0, 800.0);
 const ALIEN_BULLET_COLOR: Color = Color::rgb(0.0, 0.9, 0.0);
 const ALIEN_ODD_ROW_OFFSET: f32 = 30.0;
 const ALIEN_WALL_GAP: f32 = 20.;
-const ALIEN_SIZE: Vec2 = Vec2::new(90., 60.);
+const ALIEN_SIZE: Vec2 = Vec2::new(81., 54.);
 const ALIEN_SPEED: f32 = 75.;
 const ALIEN_ALIEN_GAP: Vec2 = Vec2::new(30., 50.);
 const ALIEN_BULLET_SPEED: f32 = 300.0;
@@ -155,7 +159,7 @@ fn main() {
         .insert_resource(Sprites::new())
         .add_plugins(DefaultPlugins)
         .add_plugin(AnimationPlugin::default())
-        .insert_resource(ClearColor(BACKGROUND_COLOR))
+        // .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(Scoreboard { score: 0 })
         .add_startup_system(setup)
         .add_state(GameState::Playing)
@@ -222,14 +226,10 @@ impl BulletBundle {
                 texture: sprite,
                 transform: Transform {
                     translation: translation.extend(0.0),
-                    scale: Vec3::ONE,
+                    scale: SHIP_BULLET_SIZE.extend(1.0),
                     ..default()
                 },
-                sprite: Sprite {
-                    color: ALIEN_BULLET_COLOR,
-                    custom_size: Some(SHIP_BULLET_SIZE),
-                    ..default()
-                },
+                sprite: generate_texture_sprite(SHIP_BULLET_SIZE, SHIP_BULLET_IMAGE_SIZE), 
                 ..default()
             },
             velocity: Velocity(Vec2::new(0.0, SHIP_BULLET_SPEED)),
@@ -295,7 +295,29 @@ fn setup(
     mut animations: ResMut<Animations>,
     mut sprites: ResMut<Sprites>
 ) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn_bundle(Camera2dBundle {
+        transform: Transform {
+            translation: Vec3::new(0.0, 0.0, CAMERA_LEVEL),
+            ..default()
+        },
+        ..default()
+    });
+
+    // background
+    commands
+        .spawn()
+        .insert_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(0.0, 0.0, BACKGROUND_LEVEL),
+                ..default()
+            },
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT)),
+                ..default()
+            },
+            texture: asset_server.load("images/space.png"),
+            ..default() 
+        });
 
      // spawn scoreboard
      commands.spawn_bundle(
@@ -373,9 +395,6 @@ fn setup(
     // ship 
     let ship_y = BOTTOM_WALL + GAP_BETWEEN_SHIP_AND_FLOOR + SHIP_SIZE.y / 2.;
 
-    let scale_x = SHIP_SIZE.x / 120.0; 
-    let scale_y = SHIP_SIZE.y / 80.0; 
-
     commands
         .spawn()
         .insert(Ship)
@@ -385,10 +404,7 @@ fn setup(
                 scale: SHIP_SIZE.extend(1.0),
                 ..default()
             },
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(scale_x, scale_y)),
-                ..default() 
-            },
+            sprite: generate_texture_sprite(ALIEN_SIZE, SHIP_IMAGE_SIZE), 
             texture: asset_server.load("images/ferris.png"),
             ..default()
         })
@@ -413,22 +429,16 @@ fn setup(
                 alien_x = first_alien_x + col as f32 * total_alien_width - ALIEN_ODD_ROW_OFFSET; 
             }
 
-            let scale_x = ALIEN_SIZE.x / 120.0;
-            let scale_y = ALIEN_SIZE.y / 80.0; 
-
             commands
                 .spawn()
                 .insert(Alien)
                 .insert_bundle(SpriteBundle {
                     transform: Transform {
                         translation: Vec3::new(alien_x, alien_y, 0.0),
-                        scale: ALIEN_SIZE.extend(1.0), // Vec3::ONE, 
+                        scale: ALIEN_SIZE.extend(1.0),
                         ..default()
                     },
-                    sprite: Sprite {
-                        custom_size: Some(Vec2::new(scale_x, scale_y)),
-                        ..default() 
-                    },
+                    sprite: generate_texture_sprite(ALIEN_SIZE, ALIEN_IMAGE_SIZE), 
                     texture: asset_server.load("images/alien_ferris.png"),
                     ..default()
                 })
@@ -445,7 +455,17 @@ fn setup(
     commands.spawn().insert_bundle(WallBundle::new(WallLocation::Bottom));
 
     // bullets
-    sprites.add("FERRIS_BULLET".to_string(), asset_server.load("images/rust.png"))
+    sprites.add("FERRIS_BULLET".to_string(), asset_server.load("images/rust_white.png"))
+}
+
+fn generate_texture_sprite(entity_size: Vec2, texture_size: Vec2) -> Sprite {
+    let size_x = entity_size.x / texture_size.x * 10.0;
+    let size_y = entity_size.y / texture_size.y * 10.0;
+
+    Sprite {
+        custom_size: Some(Vec2::new(size_x, size_y) * Vec2::splat(1.4)),
+        ..default()
+    }
 }
 
 fn update_explosions(
@@ -626,6 +646,11 @@ fn update_ship(
     }
 
     transform.translation.x += direction * SHIP_SPEED * TIME_STEP;
+
+    transform.translation.x = transform.translation.x.clamp(
+        LEFT_WALL + transform.scale.x / 2.0 + WALL_THICKNESS,
+        RIGHT_WALL - transform.scale.x / 2.0 - WALL_THICKNESS
+    );
 
     // update cooldown timer
     if let Some(cooldown_timer) = &mut shooting_cooldown {
