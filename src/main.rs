@@ -31,26 +31,25 @@ const RIGHT_WALL: f32 = WINDOW_WIDTH / 2.;
 const WALL_THICKNESS: f32 = 10.;
 
 // ship 
-const SHIP_SIZE: Vec2 = Vec2::new(90., 60.);
+const SHIP_SIZE: Vec2 = Vec2::new(120., 80.);
 const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 5.0;
 const SHIP_SPEED: f32 = 450.;
 const SHOOTING_COOLDOWN_IN_SECONDS: f32 = 0.8;
 const SHIP_BULLET_SIZE: Vec2 = Vec2::new(20.0, 20.0);
 
 // bullet 
-const BULLET_SIZE: Vec2 = Vec2::new(7.0, 20.0);
+const BULLET_SIZE: Vec2 = Vec2::new(4.0, 15.0);
 const SHIP_BULLET_SPEED: f32 = 600.;
 const SHIP_BULLET_INITIAL_GAP: f32 = 10.;
 
 // alien
 const ALIEN_BULLET_COLOR: Color = Color::rgb(0.0, 0.9, 0.0);
 const ALIEN_ODD_ROW_OFFSET: f32 = 30.0;
-const ALIEN_COLOR: Color = Color::rgb(0.0, 0.8, 0.0);
 const ALIEN_WALL_GAP: f32 = 20.;
-const ALIEN_SIZE: Vec2 = Vec2::new(40., 20.);
-const ALIEN_SPEED: f32 = 125.;
+const ALIEN_SIZE: Vec2 = Vec2::new(90., 60.);
+const ALIEN_SPEED: f32 = 75.;
 const ALIEN_ALIEN_GAP: Vec2 = Vec2::new(30., 50.);
-const ALIEN_BULLET_SPEED: f32 = 400.0;
+const ALIEN_BULLET_SPEED: f32 = 300.0;
 const INITIAL_ALIEN_DIRECTION: f32 = 1.; // right
 const DESTROY_ALIEN_SCORE: u32 = 5;
 const MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.;
@@ -227,6 +226,7 @@ impl BulletBundle {
                     ..default()
                 },
                 sprite: Sprite {
+                    color: ALIEN_BULLET_COLOR,
                     custom_size: Some(SHIP_BULLET_SIZE),
                     ..default()
                 },
@@ -341,27 +341,16 @@ fn setup(
             ]) 
             .with_text_alignment(TextAlignment::CENTER)
             .with_style(Style {
-                align_self: AlignSelf::Center,
-                justify_content: JustifyContent::Center,
                 position_type: PositionType::Absolute,
                 position: UiRect {
                     top: Val::Px(5.0),
-                    right: Val::Px(0.0),
+                    right: Val::Px(10.0),
                     ..default()
                 },
                 ..default()
             }),
         )
         .insert(Background);
-        // .with_style(Style {
-        //     position_type: PositionType::Relative,
-        //     position: UiRect {
-        //         top: SCOREBOARD_PADDING_TOP, 
-        //         left: SCOREBOARD_PADDING_LEFT,
-        //         ..default()
-        //     },
-        //     ..default()
-        // }),
 
 
     // animations
@@ -384,17 +373,20 @@ fn setup(
     // ship 
     let ship_y = BOTTOM_WALL + GAP_BETWEEN_SHIP_AND_FLOOR + SHIP_SIZE.y / 2.;
 
+    let scale_x = SHIP_SIZE.x / 120.0; 
+    let scale_y = SHIP_SIZE.y / 80.0; 
+
     commands
         .spawn()
         .insert(Ship)
         .insert_bundle(SpriteBundle {
             transform: Transform {
                 translation: Vec3::new(0.0, ship_y, 0.0),
-                scale: Vec3::ONE, // SHIP_SIZE.extend(1.),
+                scale: SHIP_SIZE.extend(1.0),
                 ..default()
             },
             sprite: Sprite {
-                custom_size: Some(SHIP_SIZE),
+                custom_size: Some(Vec2::new(scale_x, scale_y)),
                 ..default() 
             },
             texture: asset_server.load("images/ferris.png"),
@@ -420,20 +412,24 @@ fn setup(
             } else {
                 alien_x = first_alien_x + col as f32 * total_alien_width - ALIEN_ODD_ROW_OFFSET; 
             }
-            
+
+            let scale_x = ALIEN_SIZE.x / 120.0;
+            let scale_y = ALIEN_SIZE.y / 80.0; 
+
             commands
                 .spawn()
                 .insert(Alien)
                 .insert_bundle(SpriteBundle {
-                    sprite: Sprite {
-                        color: ALIEN_COLOR,
-                        ..default()
-                    },
                     transform: Transform {
                         translation: Vec3::new(alien_x, alien_y, 0.0),
-                        scale: ALIEN_SIZE.extend(1.0),
+                        scale: ALIEN_SIZE.extend(1.0), // Vec3::ONE, 
                         ..default()
                     },
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(scale_x, scale_y)),
+                        ..default() 
+                    },
+                    texture: asset_server.load("images/alien_ferris.png"),
                     ..default()
                 })
                 .insert(ShootingCooldown(Timer::from_seconds(random::<f32>() * MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS, false)))
@@ -581,9 +577,16 @@ fn update_aliens(
 
         // update cooldown timer
         if shooting_cooldown.finished() {
+            let bullet_x;
+        
+            // randomly shoot from left or right extent
+            if random::<f32>() < 0.5 {
+                bullet_x = transform.translation.x + ALIEN_SIZE.x / 2.;
+            } else {
+                bullet_x = transform.translation.x - ALIEN_SIZE.x / 2.;
+            } 
 
-            let bullet_x = transform.translation.x;
-            let bullet_y = transform.translation.y - SHIP_BULLET_INITIAL_GAP;
+            let bullet_y = transform.translation.y - ALIEN_SIZE.y / 2.; 
 
             commands
                 .spawn()
