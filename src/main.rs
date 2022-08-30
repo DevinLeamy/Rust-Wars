@@ -38,11 +38,11 @@ const SHIP_SIZE: Vec2 = Vec2::new(120., 80.);
 const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 5.0;
 const SHIP_SPEED: f32 = 450.;
 const SHOOTING_COOLDOWN_IN_SECONDS: f32 = 0.8;
-const SHIP_BULLET_SIZE: Vec2 = Vec2::new(40.0, 40.0);
+const SHIP_BULLET_SIZE: Vec2 = Vec2::new(33.0, 33.0);
 
 // bullet 
 const BULLET_SIZE: Vec2 = Vec2::new(4.0, 15.0);
-const SHIP_BULLET_SPEED: f32 = 450.0;
+const SHIP_BULLET_SPEED: f32 = 350.0;
 const SHIP_BULLET_INITIAL_GAP: f32 = 5.;
 
 // alien
