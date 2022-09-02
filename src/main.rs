@@ -47,16 +47,17 @@ const SHIP_BULLET_INITIAL_GAP: f32 = 5.;
 
 // alien
 const ALIEN_IMAGE_SIZE: Vec2 = Vec2::new(1200.0, 800.0);
-const ALIEN_BULLET_COLOR: Color = Color::rgb(0.0, 0.9, 0.0);
+const ALIEN_BULLET_COLOR: Color = Color::rgb(0.9, 0.0, 0.0);
 const ALIEN_ODD_ROW_OFFSET: f32 = 30.0;
 const ALIEN_WALL_GAP: f32 = 20.;
-const ALIEN_SIZE: Vec2 = Vec2::new(81., 54.);
+const ALIEN_SIZE: Vec2 = Vec2::new(69.0, 46.);
 const ALIEN_SPEED: f32 = 75.;
 const ALIEN_ALIEN_GAP: Vec2 = Vec2::new(30., 50.);
 const ALIEN_BULLET_SPEED: f32 = 300.0;
 const INITIAL_ALIEN_DIRECTION: f32 = 1.; // right
 const DESTROY_ALIEN_SCORE: u32 = 5;
 const MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.;
+const ALIEN_WALK_FRAME_DURATION_IN_MILLIS: u64 = 200;
 
 // explosion
 const EXPLOSION_SIZE: f32 = 0.3;
@@ -103,10 +104,15 @@ struct AnimationState(benimator::State);
 #[derive(Component, Deref, Clone)]
 struct BAnimation(benimator::Animation);
 
+enum ImageData {
+    TextureAtlas(Handle<TextureAtlas>),
+    Images(Vec<String>)
+}
+
 // TODO: use readonly public crate
 struct Animation {
     pub animation: BAnimation,
-    pub texture_atlas: Handle<TextureAtlas>   
+    pub image_data: ImageData,
 }
 
 struct Animations {
@@ -178,6 +184,7 @@ fn main() {
         )
         .add_system(update_scoreboard)
         .add_system(update_explosions)
+        .add_system(update_alien_animations)
         .add_system(bevy::window::close_on_esc)
         .run();
 }
@@ -387,10 +394,26 @@ fn setup(
             0..25,
             FrameRate::from_frame_duration(Duration::from_millis(EXPLOSION_FRAME_DURATION_IN_MILLIS)),
         )),
-        texture_atlas: texture_atlases.add(explosion_atlas)
+        image_data: ImageData::TextureAtlas(texture_atlases.add(explosion_atlas))
     };
 
     animations.add("EXPLOSION".to_string(), explosion_animation);
+
+    let alien_walk_1 = "ALIEN_WALK_1".to_string();
+    let alien_walk_2 = "ALIEN_WALK_2".to_string(); 
+
+    let alien_animation = Animation {
+        animation: BAnimation(benimator::Animation::from_indices(
+            0..2,
+            FrameRate::from_frame_duration(Duration::from_millis(ALIEN_WALK_FRAME_DURATION_IN_MILLIS))
+        )),
+        image_data: ImageData::Images(vec![alien_walk_1.clone(), alien_walk_2.clone()])
+    };
+
+    sprites.add(alien_walk_1.clone(), asset_server.load("images/alien_ferris/walk_1.png"));
+    sprites.add(alien_walk_2.clone(), asset_server.load("images/alien_ferris/walk_2.png"));
+
+    animations.add("ALIEN_WALK".to_string(), alien_animation);
 
     // ship 
     let ship_y = BOTTOM_WALL + GAP_BETWEEN_SHIP_AND_FLOOR + SHIP_SIZE.y / 2.;
@@ -439,11 +462,13 @@ fn setup(
                         ..default()
                     },
                     sprite: generate_texture_sprite(ALIEN_SIZE, ALIEN_IMAGE_SIZE), 
-                    texture: asset_server.load("images/alien_ferris.png"),
+                    texture: sprites.get(alien_walk_1.clone()).unwrap().clone(),
                     ..default()
                 })
+                .insert(animations.get("ALIEN_WALK".to_string()).unwrap().animation.clone())
                 .insert(ShootingCooldown(Timer::from_seconds(random::<f32>() * MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS, false)))
                 .insert(Velocity(Vec2::new(ALIEN_SPEED * INITIAL_ALIEN_DIRECTION, 0.0)))
+                .insert(AnimationState::default())
                 .insert(Collider);
         }
     }
@@ -480,6 +505,23 @@ fn update_explosions(
         }
         animation_state.update(explosion_animation, Duration::from_secs_f32(TIME_STEP));
         texture_atlas.index = animation_state.frame_index();
+    }
+}
+
+fn update_alien_animations (
+    mut query: Query<(&mut AnimationState, &BAnimation, &mut Handle<Image>), With<Alien>>,
+    sprites: Res<Sprites>,
+    animations: Res<Animations>, 
+) {
+    let alien_walk_animation = animations.get("ALIEN_WALK".to_string()).unwrap();
+    let images = match &alien_walk_animation.image_data {
+        ImageData::Images(images) => images,
+        _                         => panic!("Image data not found")
+    };
+
+    for (mut animation_state, alien_animation, mut texture) in query.iter_mut() {
+        animation_state.update(alien_animation, Duration::from_secs_f32(TIME_STEP));
+        *texture = sprites.get(images[animation_state.frame_index() as usize].clone()).unwrap().clone()
     }
 }
 
@@ -551,11 +593,15 @@ fn check_for_alien_collisions(
                 commands.entity(alien_entity).despawn();
 
                 let explosion = animations.get("EXPLOSION".to_string()).unwrap();
+                let texture_atlas = match &explosion.image_data { 
+                    ImageData::TextureAtlas(texture_atlas) => texture_atlas, 
+                    _                                      => panic!("Explosion is stored as a texture atlas!")
+                };
 
                 commands
                     .spawn()
                     .insert_bundle(SpriteSheetBundle {
-                        texture_atlas: explosion.texture_atlas.clone(),
+                        texture_atlas: texture_atlas.clone(),
                         transform: Transform {
                             translation: bullet_transform.translation,
                             scale: Vec3::splat(EXPLOSION_SIZE),
