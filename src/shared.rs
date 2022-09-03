@@ -39,6 +39,18 @@ pub const SCOREBOARD_PADDING_LEFT: Val = Val::Px(10.0);
 pub const EXPLOSION_SIZE: f32 = 0.3;
 pub const EXPLOSION_FRAME_DURATION_IN_MILLIS: u64 = 20;
 
+/*
+So basically, we want to have a "transition" state between the action to launch the game and the start of the playing 
+state are everything that's going to be active in the playing state goes to it's rightful place.
+
+The idea for implementing this is simple. When the play button is pressed, we transistion to a GameState::LoadWave which: spawns 
+the player, spawns the aliens and brings them into view, and then, once down, transition to the playing state where 
+the player can move and the aliens can shoot.
+
+With this setup, it means that after the player has cleared the current wave, we can spawn a new wave by transitioning into
+the GameState::LoadWave state. Nice and easy.
+*/
+
 #[derive(Component, Deref, DerefMut)]
 pub struct DespawnTimer(pub Timer);
 

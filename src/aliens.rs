@@ -7,8 +7,7 @@ use iyes_loopless::prelude::*;
 
 use crate::{shared::*, Scoreboard, Explosion, GameState};
 
-
-// alien
+// Alien::Aris alien
 const ALIEN_ODD_ROW_OFFSET: f32 = 30.0;
 const ALIEN_WALL_GAP: f32 = 20.;
 pub const ALIEN_SIZE: Vec2 = Vec2::new(69.0, 46.);
@@ -24,8 +23,8 @@ pub const BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.1;
 
 #[derive(Component)]
 pub enum Alien {
-    ARIS,
-    RAKET
+    Aris,
+    Raket
 }
 
 pub struct AliensPlugin;
@@ -40,11 +39,14 @@ impl Plugin for AliensPlugin {
         app
             .add_stage_before(
                 CoreStage::Update,
-                "Alien_FixedUpdate",
-                FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
+                "Alien Fixed Timestep",
+                FixedTimestepStage::from_stage(
+                    Duration::from_secs_f32(TIME_STEP), 
+                    fixedupdate
+                )
             )
             .add_startup_system(load_assets)
-            .add_enter_system(GameState::Playing, spawn_aliens);
+            .add_enter_system(GameState::LoadWaveState, spawn_aliens);
     }
 }
 
@@ -77,9 +79,9 @@ struct AlienBundle {
 }
 
 impl AlienBundle {
-    fn new(size: Vec2, translation: Vec2, max_shooting_cooldown_time: f32, velocity: Vec2, texture: Handle<Image>) -> AlienBundle {
+    fn new_aris(size: Vec2, translation: Vec2, max_shooting_cooldown_time: f32, velocity: Vec2, texture: Handle<Image>) -> AlienBundle {
         AlienBundle {
-            alien: Alien::ARIS,
+            alien: Alien::Aris,
             sprite_bundle: SpriteBundle {
                 transform: Transform { translation: translation.extend(0.0), ..default() },
                 sprite: Sprite { custom_size: Some(size), ..default() },
@@ -109,7 +111,7 @@ fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sp
 
             commands
                 .spawn()
-                .insert_bundle(AlienBundle::new(
+                .insert_bundle(AlienBundle::new_aris(
                     ALIEN_SIZE,
                     Vec2::new(alien_x, alien_y),
                     MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS,
@@ -122,9 +124,9 @@ fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sp
     }
 }
 
-fn wave_two(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
+// fn wave_two(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
 
-}
+// }
 
 fn spawn_aliens(commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
     wave_one(commands, animations, sprites);    

@@ -19,11 +19,16 @@ use debug::DebugPlugin;
 mod gameover;
 use gameover::GameOverPlugin;
 
+mod launch;
+use launch::MenuPlugin;
+
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 enum GameState {
-    Playing,
-    GameOver,
+    Menu,           // Game menu (press space to play)
+    Playing,        // Player and enemies can move and shoot
+    GameOver,       // Player is frozen and enemies have been despawned (press r to restart)
+    LoadWaveState,  // Load enemies into the scene (player and enemies cannot shoot)
 }
 
 #[derive(Component)]
@@ -35,12 +40,18 @@ struct Scoreboard { score: u32, }
 #[derive(Component)]
 struct Explosion;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(StageLabel)]
+pub enum TurboStages {
+    FixedUpdate
+}
+
 fn main() {
     // stage for anything we want to do on a fixed timestep
     let mut fixedupdate = SystemStage::parallel();
-    fixedupdate.add_system(update_bullets.run_in_state(GameState::Playing));
-    fixedupdate.add_system(check_gameover.run_in_state(GameState::Playing));
-    fixedupdate.add_system(update_timed);
+        fixedupdate.add_system(update_bullets.run_in_state(GameState::Playing));
+        fixedupdate.add_system(check_gameover.run_in_state(GameState::Playing));
+        fixedupdate.add_system(update_timed);
 
     App::new()
         .insert_resource(WindowDescriptor {
@@ -51,17 +62,22 @@ fn main() {
             position: WindowPosition::Centered(MonitorSelection::Number(0)),
             ..default()
         })
-        .add_loopless_state(GameState::Playing)
-        .insert_resource(Animations::new())
-        .insert_resource(Sprites::new())
+        .add_loopless_state(GameState::Menu)
         .add_plugins(DefaultPlugins)
-        .add_plugin(DebugPlugin)
-        .add_plugin(GameOverPlugin)
+        // fixed update 
         .add_stage_before(
             CoreStage::Update,
-            "FixedUpdate",
+            "Main Fixed TimeStep",
             FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
         )
+        // resources
+        .insert_resource(Animations::new())
+        .insert_resource(Sprites::new())
+        // plugins
+        .add_plugin(DebugPlugin)
+        .add_plugin(MenuPlugin)
+        .add_plugin(GameOverPlugin)
+
         .add_enter_system(GameState::Playing, reset_scoreboard)
         .add_plugin(PlayerPlugin)
         .add_plugin(AliensPlugin)
@@ -190,7 +206,6 @@ fn setup(
     // bullets
     sprites.add("FERRIS_BULLET".to_string(), asset_server.load("images/rust_white.png"))
 }
-
 
 fn update_explosions(
     mut query: Query<(Entity, &mut AnimationState, &mut TextureAtlasSprite, &BAnimation), With<Explosion>>,

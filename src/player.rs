@@ -51,7 +51,7 @@ impl Plugin for PlayerPlugin {
             )
             .add_startup_system(load_assets)
             .add_enter_system(GameState::Playing, spawn_ship_health_display)
-            .add_enter_system(GameState::Playing, spawn_player);
+            .add_enter_system(GameState::LoadWaveState, spawn_player);
     }
 }
 
