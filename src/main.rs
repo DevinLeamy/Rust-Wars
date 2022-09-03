@@ -65,6 +65,7 @@ fn main() {
             "FixedUpdate",
             FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
         )
+        .add_enter_system(GameState::Playing, reset_scoreboard)
         .add_plugin(PlayerPlugin)
         .add_plugin(AliensPlugin)
         .add_plugin(AnimationPlugin::default())
@@ -207,6 +208,10 @@ fn update_explosions(
         animation_state.update(explosion_animation, Duration::from_secs_f32(TIME_STEP));
         texture_atlas.index = animation_state.frame_index();
     }
+}
+
+fn reset_scoreboard(mut scoreboard: ResMut<Scoreboard>) {
+    scoreboard.score = 0;
 }
 
 fn check_gameover(

@@ -95,10 +95,10 @@ fn spawn_aliens(
                         ..default()
                     },
                     sprite: generate_texture_sprite(ALIEN_SIZE, ALIEN_IMAGE_SIZE), 
-                    texture: sprites.get(alien_walk_1.clone()).unwrap().clone(),
+                    texture: sprites.get(alien_walk_1.clone()),
                     ..default()
                 })
-                .insert(animations.get("ALIEN_WALK".to_string()).unwrap().animation.clone())
+                .insert(animations.get("ALIEN_WALK".to_string()).animation)
                 .insert(ShootingCooldown(Timer::from_seconds(random::<f32>() * MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS, false)))
                 .insert(Velocity(Vec2::new(ALIEN_SPEED * INITIAL_ALIEN_DIRECTION, 0.0)))
                 .insert(AnimationState::default())
@@ -174,7 +174,7 @@ fn check_for_alien_collisions(
                 commands.entity(bullet_entity).despawn();
                 commands.entity(alien_entity).despawn();
 
-                let explosion = animations.get("EXPLOSION".to_string()).unwrap();
+                let explosion = animations.get("EXPLOSION".to_string());
                 let texture_atlas = match &explosion.image_data { 
                     ImageData::TextureAtlas(texture_atlas) => texture_atlas, 
                     _                                      => panic!("Explosion is stored as a texture atlas!")
@@ -208,7 +208,7 @@ fn update_alien_animations (
     sprites: Res<Sprites>,
     animations: Res<Animations>, 
 ) {
-    let alien_walk_animation = animations.get("ALIEN_WALK".to_string()).unwrap();
+    let alien_walk_animation = animations.get("ALIEN_WALK".to_string());
     let images = match &alien_walk_animation.image_data {
         ImageData::Images(images) => images,
         _                         => panic!("Image data not found")
@@ -216,6 +216,6 @@ fn update_alien_animations (
 
     for (mut animation_state, alien_animation, mut texture) in query.iter_mut() {
         animation_state.update(alien_animation, Duration::from_secs_f32(TIME_STEP));
-        *texture = sprites.get(images[animation_state.frame_index() as usize].clone()).unwrap().clone()
+        *texture = sprites.get(images[animation_state.frame_index() as usize].clone())
     }
 }

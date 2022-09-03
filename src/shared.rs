@@ -22,6 +22,7 @@ pub const WALL_THICKNESS: f32 = 10.;
 pub const BULLET_SIZE: Vec2 = Vec2::new(4.0, 15.0);
 pub const SHIP_BULLET_SPEED: f32 = 350.0;
 pub const SHIP_BULLET_INITIAL_GAP: f32 = 5.;
+pub const BULLET_LAYER: f32 = 1.0;
 
 // background
 pub const BACKGROUND_FONT_COLOR: Color = Color::rgb(1.0, 1.0, 1.0);
@@ -70,8 +71,9 @@ impl Sprites {
     pub fn add(&mut self, sprite_name: String, sprite: Handle<Image>) {
         self.sprites.insert(sprite_name, sprite);
     }
-    pub fn get(&self, sprite_name: String) -> Option<&Handle<Image>> {
-        self.sprites.get(&sprite_name)
+
+    pub fn get(&self, sprite_name: String) -> Handle<Image> {
+        self.sprites.get(&sprite_name).unwrap().clone()
     }
 }
 
@@ -90,7 +92,7 @@ impl BulletBundle {
         BulletBundle {
             sprite_bundle: SpriteBundle {
                 transform: Transform {
-                    translation: translation.extend(0.0),
+                    translation: translation.extend(BULLET_LAYER),
                     scale: BULLET_SIZE.extend(1.0),
                     ..default()
                 },
@@ -111,7 +113,7 @@ impl BulletBundle {
             sprite_bundle: SpriteBundle {
                 texture: sprite,
                 transform: Transform {
-                    translation: translation.extend(0.0),
+                    translation: translation.extend(BULLET_LAYER),
                     scale: SHIP_BULLET_SIZE.extend(1.0),
                     ..default()
                 },
@@ -141,12 +143,14 @@ pub struct AnimationState(benimator::State);
 #[derive(Component, Deref, Clone)]
 pub struct BAnimation(pub benimator::Animation);
 
+#[derive(Clone)]
 pub enum ImageData {
     TextureAtlas(Handle<TextureAtlas>),
     Images(Vec<String>)
 }
 
 // TODO: use readonly public crate
+#[derive(Clone)]
 pub struct Animation {
     pub animation: BAnimation,
     pub image_data: ImageData,
@@ -165,8 +169,8 @@ impl Animations {
     pub fn add(&mut self, animation_name: String, animation: Animation) {
         self.animations.insert(animation_name, animation);
     }
-    pub fn get(&self, animation_name: String) -> Option<&Animation> {
-        self.animations.get(&animation_name)
+    pub fn get(&self, animation_name: String) -> Animation {
+        self.animations.get(&animation_name).unwrap().clone()
     }
 }
 

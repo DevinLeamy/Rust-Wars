@@ -32,7 +32,7 @@ fn create_gameover_screen(
         .insert_bundle(
             TextBundle::from_sections([
                 TextSection::new(
-                    "GAME OVER\n",
+                    "GAME OVER\n\n",
                     TextStyle {
                         font_size: 40.0, 
                         color: Color::rgb(0.8, 0.0, 0.0),

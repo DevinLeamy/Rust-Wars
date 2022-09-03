@@ -1,3 +1,4 @@
+use benimator::FrameRate;
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use rand::random;
 use crate::{shared::*, aliens::ALIEN_SIZE, GameState};
@@ -12,6 +13,7 @@ const SHIP_SPEED: f32 = 450.;
 const SHOOTING_COOLDOWN_IN_SECONDS: f32 = 0.8;
 pub const SHIP_BULLET_SIZE: Vec2 = Vec2::new(33.0, 33.0);
 pub const INITIAL_HEALTH_POINTS: u32 = 5;
+pub const SHIP_WALK_FRAME_DURATION_IN_MILLIS: u64 = 200;
 
 const HEART_SIZE: Vec2 = Vec2::new(30., 30.);
 const HEART_CORNER_OFFSET: Vec2 = Vec2::new(25., 25.);
@@ -19,6 +21,13 @@ const HEART_PADDING_RIGHT: f32 = 10.0;
 
 #[derive(Component)]
 pub struct Ship;
+
+#[derive(Component, PartialEq, Eq)]
+pub enum FerrisState {
+    WALKING,
+    IDLE,
+    DEAD
+}
 
 #[derive(Component)]
 struct HealthDisplayHeart(u32);
@@ -31,6 +40,7 @@ impl Plugin for PlayerPlugin {
         fixedupdate.add_system(update_ship.run_in_state(GameState::Playing));
         fixedupdate.add_system(check_for_ship_collisions.run_in_state(GameState::Playing));
         fixedupdate.add_system(update_health_display.run_in_state(GameState::Playing));
+        fixedupdate.add_system(update_ferris_display.run_in_state(GameState::Playing));
 
         app
             .add_stage_before(
@@ -45,10 +55,10 @@ impl Plugin for PlayerPlugin {
 
 fn check_for_ship_collisions(
     mut commands: Commands,
-    mut ship_query: Query<(&Transform, &mut Health), With<Ship>>,
+    mut ship_query: Query<(&Transform, &mut Health, &mut FerrisState), With<Ship>>,
     bullet_query: Query<(Entity, &Transform, &Bullet)>,
 ) {
-    let (ship_transform, mut health) = ship_query.single_mut();
+    let (ship_transform, mut health, mut ferris_state) = ship_query.single_mut();
 
     for (bullet_entity, bullet_transform, bullet) in bullet_query.iter() {
         if bullet == &Bullet::Ship {
@@ -63,6 +73,10 @@ fn check_for_ship_collisions(
         ) {
             commands.entity(bullet_entity).despawn();
             health.0 -= 1;
+
+            if health.0 == 0 {
+                *ferris_state = FerrisState::DEAD
+            }
             break;
         } 
     }
@@ -95,7 +109,7 @@ fn spawn_ship_health_display(
                     custom_size: Some(HEART_SIZE), 
                     ..default()
                 },
-                texture: sprites.get("HEART".to_string()).unwrap().clone(),
+                texture: sprites.get("HEART".to_string()),
                 ..default()
             })
             .insert(Name::new("Health Display Heart"));
@@ -118,8 +132,26 @@ fn update_health_display(
 
 fn spawn_player(
     mut commands: Commands,
-    asset_server: Res<AssetServer>
+    asset_server: Res<AssetServer>,
+    mut sprites: ResMut<Sprites>,
+    mut animations: ResMut<Animations>
 ) {
+    sprites.add("ALARMED_FERRIS".to_string(), asset_server.load("images/alarmed_ferris.png"));
+    sprites.add("HAPPY_FERRIS".to_string(), asset_server.load("images/ferris.png"));
+
+    let ferris_walk_animation = Animation {
+        animation: BAnimation(benimator::Animation::from_indices(
+            0..2,
+            FrameRate::from_frame_duration(Duration::from_millis(SHIP_WALK_FRAME_DURATION_IN_MILLIS))
+        )),
+        image_data: ImageData::Images(vec!["FERRIS_WALK_1".to_string(), "FERRIS_WALK_2".to_string()])
+    };
+
+    sprites.add("FERRIS_WALK_1".to_string(), asset_server.load("images/ferris_walk/ferris_walk_1.png"));
+    sprites.add("FERRIS_WALK_2".to_string(), asset_server.load("images/ferris_walk/ferris_walk_2.png"));
+
+    animations.add("FERRIS_WALK".to_string(), ferris_walk_animation);
+
      // ship 
      let ship_y = BOTTOM_WALL + GAP_BETWEEN_SHIP_AND_FLOOR + SHIP_SIZE.y / 2.;
 
@@ -134,19 +166,26 @@ fn spawn_player(
                  ..default()
              },
              sprite: generate_texture_sprite(ALIEN_SIZE, SHIP_IMAGE_SIZE), 
-             texture: asset_server.load("images/ferris.png"),
+             texture: sprites.get("HAPPY_FERRIS".to_string()),
              ..default()
          })
+         .insert(animations.get("FERRIS_WALK".to_string()).animation)
+         .insert(AnimationState::default())
+         .insert(FerrisState::IDLE)
          .insert(Collider);
 }
 
 fn update_ship(
     keyboard_input: Res<Input<KeyCode>>, 
-    mut query: Query<(Entity, &mut Transform, Option<&mut ShootingCooldown>), With<Ship>>, 
+    mut query: Query<(Entity, &mut Transform, &mut FerrisState, Option<&mut ShootingCooldown>), With<Ship>>, 
     sprites: Res<Sprites>,
     mut commands: Commands
 ) {
-    let (ship, mut transform, mut shooting_cooldown) = query.single_mut(); 
+    let (ship, mut transform, mut state, mut shooting_cooldown) = query.single_mut(); 
+
+    if *state == FerrisState::DEAD {
+        return;
+    }
 
     let mut direction = 0.;
 
@@ -156,8 +195,12 @@ fn update_ship(
 
     if move_left {
         direction = -1.;
+        *state = FerrisState::WALKING;
     } else if move_right {
         direction = 1.;
+        *state = FerrisState::WALKING;
+    } else {
+        *state = FerrisState::IDLE;
     }
 
     transform.translation.x += direction * SHIP_SPEED * TIME_STEP;
@@ -196,7 +239,35 @@ fn update_ship(
             .spawn()
             .insert_bundle(BulletBundle::from_ship(
                 Vec2::new(bullet_x, bullet_y), 
-                sprites.get("FERRIS_BULLET".to_string()).unwrap().clone()
+                sprites.get("FERRIS_BULLET".to_string())
             ));
+    }
+}
+
+
+fn update_ferris_display (
+    mut query: Query<(&mut AnimationState, &BAnimation, &mut Handle<Image>, &FerrisState), With<Ship>>,
+    sprites: Res<Sprites>,
+    animations: Res<Animations>, 
+) {
+    let ferris_walk_animation = animations.get("FERRIS_WALK".to_string());
+    let images = match &ferris_walk_animation.image_data {
+        ImageData::Images(images) => images,
+        _                         => panic!("Image data not found")
+    };
+
+    let (mut animation_state, ferris_animation, mut texture, ferris_state) = query.single_mut();
+
+    match ferris_state {
+        FerrisState::IDLE => {
+            *texture = sprites.get("HAPPY_FERRIS".to_string());
+        }
+        FerrisState::WALKING => {
+            animation_state.update(ferris_animation, Duration::from_secs_f32(TIME_STEP));
+            *texture = sprites.get(images[animation_state.frame_index() as usize].clone());
+        },
+        FerrisState::DEAD => {
+            *texture = sprites.get("ALARMED_FERRIS".to_string());
+        }
     }
 }
