@@ -38,6 +38,9 @@ pub const SCOREBOARD_PADDING_LEFT: Val = Val::Px(10.0);
 pub const EXPLOSION_SIZE: f32 = 0.3;
 pub const EXPLOSION_FRAME_DURATION_IN_MILLIS: u64 = 20;
 
+#[derive(Component, Debug, PartialEq, Eq)]
+pub struct Health(pub u32);
+
 #[derive(Component)]
 pub struct Collider;
 

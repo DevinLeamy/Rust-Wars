@@ -211,8 +211,7 @@ fn update_explosions(
 
 fn check_gameover(
     alien_query: Query<&Transform, With<Alien>>, 
-    bullet_query: Query<(&Transform, &Bullet)>,
-    ship_query: Query<&Transform, With<Ship>>,
+    ship_query: Query<(&Transform, &Health), With<Ship>>,
     game_state: Res<CurrentState<GameState>>,
     mut commands: Commands
 ) {
@@ -226,7 +225,7 @@ fn check_gameover(
         gameover = true;
     }
 
-    let ship_transform = ship_query.single();
+    let (ship_transform, ship_health) = ship_query.single();
 
     for alien_transform in &alien_query {
         if alien_transform.translation.y < ship_transform.translation.y {
@@ -234,20 +233,8 @@ fn check_gameover(
         }
     }
 
-    for (bullet_transform, bullet) in &bullet_query {
-        if bullet == &Bullet::Ship {
-            // ignore bullets from the ship 
-            continue;
-        }
-        if let Some(_collision) = collide(
-            ship_transform.translation,
-            ship_transform.scale.truncate(),
-            bullet_transform.translation,
-            bullet_transform.scale.truncate(),
-        ) {
-            gameover = true;
-            break;
-        } 
+    if ship_health.0 == 0 {
+        gameover = true;
     }
 
     if gameover { 

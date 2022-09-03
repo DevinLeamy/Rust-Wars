@@ -67,7 +67,7 @@ fn spawn_aliens(
     animations.add("ALIEN_WALK".to_string(), alien_animation);
 
     let first_alien_x = LEFT_WALL + ALIEN_WALL_GAP + ALIEN_SIZE.x / 2.;
-    let first_alien_y = TOP_WALL - ALIEN_WALL_GAP  - ALIEN_SIZE.y / 2.;
+    let first_alien_y = TOP_WALL - ALIEN_WALL_GAP  - ALIEN_SIZE.y / 2. - 80.;
 
     let total_alien_width = ALIEN_SIZE.x + ALIEN_ALIEN_GAP.x;
     let total_alien_height = ALIEN_SIZE.y + ALIEN_ALIEN_GAP.y;
