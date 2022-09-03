@@ -1,6 +1,5 @@
-use std::{time::Duration, collections::HashMap};
+use std::time::Duration;
 use benimator::FrameRate;
-use rand::*;
 
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use iyes_loopless::prelude::*;
@@ -14,6 +13,11 @@ use aliens::{AliensPlugin, Alien};
 mod shared;
 use shared::*;
 
+mod debug;
+use debug::DebugPlugin;
+
+mod gameover;
+use gameover::GameOverPlugin;
 
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -31,16 +35,14 @@ struct Scoreboard { score: u32, }
 #[derive(Component)]
 struct Explosion;
 
-
-
 fn main() {
     // stage for anything we want to do on a fixed timestep
     let mut fixedupdate = SystemStage::parallel();
     fixedupdate.add_system(
-        update_bullets.run_in_bevy_state(GameState::Playing)
+        update_bullets.run_in_state(GameState::Playing)
     );
     fixedupdate.add_system(
-        check_gameover.run_in_bevy_state(GameState::Playing)
+        check_gameover.run_in_state(GameState::Playing)
     );
 
     App::new()
@@ -52,9 +54,12 @@ fn main() {
             position: WindowPosition::Centered(MonitorSelection::Number(0)),
             ..default()
         })
+        .add_loopless_state(GameState::Playing)
         .insert_resource(Animations::new())
         .insert_resource(Sprites::new())
         .add_plugins(DefaultPlugins)
+        .add_plugin(GameOverPlugin)
+        .add_plugin(DebugPlugin)
         .add_stage_before(
             CoreStage::Update,
             "FixedUpdate",
@@ -65,12 +70,6 @@ fn main() {
         .add_plugin(AnimationPlugin::default())
         .insert_resource(Scoreboard { score: 0 })
         .add_startup_system(setup)
-        .add_state(GameState::Playing)
-        
-        .add_system_set(
-            SystemSet::on_enter(GameState::GameOver)
-                .with_system(play_gameover)
-        )
         .add_system(update_scoreboard)
         .add_system(update_explosions)
         .add_system(bevy::window::close_on_esc)
@@ -214,9 +213,10 @@ fn check_gameover(
     alien_query: Query<&Transform, With<Alien>>, 
     bullet_query: Query<(&Transform, &Bullet)>,
     ship_query: Query<&Transform, With<Ship>>,
-    mut game_state: ResMut<State<GameState>>
+    game_state: Res<CurrentState<GameState>>,
+    mut commands: Commands
 ) {
-    if game_state.current() == &GameState::GameOver {
+    if game_state.as_ref() == &CurrentState(GameState::GameOver) {
         return;
     }
 
@@ -251,47 +251,9 @@ fn check_gameover(
     }
 
     if gameover { 
-        game_state.clear_schedule();
-        game_state.set(GameState::GameOver).unwrap_or_default();
+        commands.insert_resource(NextState(GameState::GameOver));
     }
 }
-
-fn play_gameover(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    alien_query: Query<Entity, With<Alien>>
-) {
-    for alien_entity in alien_query.iter() {
-        commands.entity(alien_entity).despawn();
-    }
-
-    commands
-        .spawn()
-        .insert_bundle(
-            TextBundle::from_sections([
-                TextSection::new(
-                    "GAME OVER: cannot borrow `x` as mutable because it is also borrowed as immutable",
-                    TextStyle {
-                        font_size: 20.0, 
-                        color: Color::rgb(0.8, 0.0, 0.0),
-                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    },
-                ),
-            ]) 
-            .with_style(Style {
-                position_type: PositionType::Absolute,
-                position: UiRect {
-                    top: Val::Px(50.0),
-                    left: Val::Px(50.0),
-                    ..default()
-                },
-                ..default()
-            }),
-        );
-}
-
-
-
 
 fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text, With<Scoreboard>>) {
     let mut score_text = query.single_mut();

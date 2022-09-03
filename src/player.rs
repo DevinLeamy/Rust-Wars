@@ -21,7 +21,7 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         let mut fixedupdate = SystemStage::parallel();
-        fixedupdate.add_system(update_ship.run_in_bevy_state(GameState::Playing));
+        fixedupdate.add_system(update_ship.run_in_state(GameState::Playing));
 
         app
             .add_stage_before(
@@ -29,7 +29,7 @@ impl Plugin for PlayerPlugin {
                 "Player_FixedUpdate",
                 FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
             )
-            .add_startup_system(spawn_player);
+            .add_enter_system(GameState::Playing, spawn_player);
     }
 }
 

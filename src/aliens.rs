@@ -30,9 +30,9 @@ pub struct AliensPlugin;
 impl Plugin for AliensPlugin {
     fn build(&self, app: &mut App) {
         let mut fixedupdate = SystemStage::parallel();
-        fixedupdate.add_system(update_aliens.run_in_bevy_state(GameState::Playing));
-        fixedupdate.add_system(update_alien_animations.run_in_bevy_state(GameState::Playing));
-        fixedupdate.add_system(check_for_alien_collisions.run_in_bevy_state(GameState::Playing));
+        fixedupdate.add_system(update_aliens.run_in_state(GameState::Playing));
+        fixedupdate.add_system(update_alien_animations.run_in_state(GameState::Playing));
+        fixedupdate.add_system(check_for_alien_collisions.run_in_state(GameState::Playing));
 
         app
             .add_stage_before(
@@ -40,7 +40,7 @@ impl Plugin for AliensPlugin {
                 "Alien_FixedUpdate",
                 FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
             )
-            .add_startup_system(spawn_aliens);
+            .add_enter_system(GameState::Playing, spawn_aliens);
     }
 }
 
