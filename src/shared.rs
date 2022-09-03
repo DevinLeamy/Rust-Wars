@@ -62,7 +62,6 @@ pub enum Bullet {
 #[derive(Component, Deref, DerefMut)]
 pub struct ShootingCooldown(pub Timer);
 
-
 pub struct Sprites {
     sprites: HashMap<String, Handle<Image>>
 }

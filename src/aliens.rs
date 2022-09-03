@@ -23,7 +23,10 @@ pub const BULLET_FLASH_SIZE: Vec2 = Vec2::new(35.0, 35.0);
 pub const BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.1;
 
 #[derive(Component)]
-pub struct Alien;
+pub enum Alien {
+    ARIS,
+    RAKET
+}
 
 pub struct AliensPlugin;
 
@@ -45,31 +48,53 @@ impl Plugin for AliensPlugin {
     }
 }
 
-fn load_assets(asset_server: Res<AssetServer>, mut sprites: ResMut<Sprites>) {
+fn load_assets(asset_server: Res<AssetServer>, mut sprites: ResMut<Sprites>, mut animations: ResMut<Animations>) {
     sprites.add("ALIEN_BULLET".to_string(), asset_server.load("images/alien_bullet/bullet.png"));
     sprites.add("ALIEN_BULLET_FLASH".to_string(), asset_server.load("images/alien_bullet/bullet_flash.png"));
     sprites.add("ALIEN_WALK_1".to_string(), asset_server.load("images/alien_ferris/walk_1.png"));
     sprites.add("ALIEN_WALK_2".to_string(), asset_server.load("images/alien_ferris/walk_2.png"));
-}
-
-fn spawn_aliens(
-    mut commands: Commands,
-    mut animations: ResMut<Animations>,
-    sprites: Res<Sprites>
-) {
-    let alien_walk_1 = "ALIEN_WALK_1".to_string();
-    let alien_walk_2 = "ALIEN_WALK_2".to_string(); 
 
     let alien_animation = Animation {
         animation: BAnimation(benimator::Animation::from_indices(
             0..2,
             FrameRate::from_frame_duration(Duration::from_millis(ALIEN_WALK_FRAME_DURATION_IN_MILLIS))
         )),
-        image_data: ImageData::Images(vec![alien_walk_1.clone(), alien_walk_2.clone()])
+        image_data: ImageData::Images(vec!["ALIEN_WALK_1".to_string(), "ALIEN_WALK_2".to_string()])
     };
 
     animations.add("ALIEN_WALK".to_string(), alien_animation);
+}
 
+#[derive(Bundle)]
+struct AlienBundle {
+    #[bundle]
+    sprite_bundle: SpriteBundle,
+    collider: Collider,
+    alien: Alien,
+    shooting_cooldown: ShootingCooldown,
+    velocity: Velocity,
+    name: Name
+}
+
+impl AlienBundle {
+    fn new(size: Vec2, translation: Vec2, max_shooting_cooldown_time: f32, velocity: Vec2, texture: Handle<Image>) -> AlienBundle {
+        AlienBundle {
+            alien: Alien::ARIS,
+            sprite_bundle: SpriteBundle {
+                transform: Transform { translation: translation.extend(0.0), ..default() },
+                sprite: Sprite { custom_size: Some(size), ..default() },
+                texture: texture,
+                ..default()
+            },
+            collider: Collider { size: size },
+            shooting_cooldown: ShootingCooldown(Timer::from_seconds(random::<f32>() * max_shooting_cooldown_time, false)),
+            velocity: Velocity(velocity),
+            name: Name::new("Alien")
+        }
+    } 
+}
+
+fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
     let first_alien_x = LEFT_WALL + ALIEN_WALL_GAP + ALIEN_SIZE.x / 2.;
     let first_alien_y = TOP_WALL - ALIEN_WALL_GAP  - ALIEN_SIZE.y / 2. - 80.;
 
@@ -79,40 +104,30 @@ fn spawn_aliens(
     // spawn aliens
     for row in 0..5 {
         for col in 0..(5 + row % 2) {
+            let alien_x = first_alien_x + col as f32 * total_alien_width - ALIEN_ODD_ROW_OFFSET * ((row % 2) as f32); 
             let alien_y = first_alien_y - row as f32 * total_alien_height; 
-
-            let alien_x;
-
-            if row % 2 == 0 { 
-                alien_x = first_alien_x + col as f32 * total_alien_width; 
-            } else {
-                alien_x = first_alien_x + col as f32 * total_alien_width - ALIEN_ODD_ROW_OFFSET; 
-            }
 
             commands
                 .spawn()
-                .insert(Alien)
-                .insert_bundle(SpriteBundle {
-                    transform: Transform {
-                        translation: Vec3::new(alien_x, alien_y, 0.0),
-                        scale: Vec3::splat(1.0),
-                        ..default()
-                    },
-                    sprite: Sprite {
-                        custom_size: Some(ALIEN_SIZE),
-                        ..default()
-                    }, 
-                    texture: sprites.get(alien_walk_1.clone()),
-                    ..default()
-                })
-                .insert(Name::new("Alien"))
+                .insert_bundle(AlienBundle::new(
+                    ALIEN_SIZE,
+                    Vec2::new(alien_x, alien_y),
+                    MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS,
+                    Vec2::new(ALIEN_SPEED * INITIAL_ALIEN_DIRECTION, 0.0),
+                    sprites.get("ALIEN_WALK_1".to_string()) 
+                ))
                 .insert(animations.get("ALIEN_WALK".to_string()).animation)
-                .insert(ShootingCooldown(Timer::from_seconds(random::<f32>() * MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS, false)))
-                .insert(Velocity(Vec2::new(ALIEN_SPEED * INITIAL_ALIEN_DIRECTION, 0.0)))
-                .insert(AnimationState::default())
-                .insert(Collider { size: ALIEN_SIZE });
+                .insert(AnimationState::default());
         }
     }
+}
+
+fn wave_two(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
+
+}
+
+fn spawn_aliens(commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
+    wave_one(commands, animations, sprites);    
 }
 
 fn update_aliens(

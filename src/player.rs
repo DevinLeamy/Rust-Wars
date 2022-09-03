@@ -17,8 +17,8 @@ const HEART_SIZE: Vec2 = Vec2::new(30., 30.);
 const HEART_CORNER_OFFSET: Vec2 = Vec2::new(25., 25.);
 const HEART_PADDING_RIGHT: f32 = 10.0;
 
-const FERRIS_BULLET_FLASH_SIZE: Vec2 = Vec2::new(120.0, 120.0);
-const FERRIS_BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.2;
+// const FERRIS_BULLET_FLASH_SIZE: Vec2 = Vec2::new(120.0, 120.0);
+// const FERRIS_BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.1;
 
 #[derive(Component)]
 pub struct Ship;
@@ -142,8 +142,6 @@ fn spawn_player(
     mut sprites: ResMut<Sprites>,
     mut animations: ResMut<Animations>
 ) {
-
-
     let ferris_walk_animation = Animation {
         animation: BAnimation(benimator::Animation::from_indices(
             0..2,
@@ -242,24 +240,24 @@ fn update_ship(
                 sprites.get("FERRIS_BULLET".to_string())
             ));
         
-        let bullet_flash = commands
-            .spawn()
-            .insert_bundle(SpriteBundle {
-                transform: Transform {
-                    translation: Vec2::new(offset * (SHIP_SIZE.x / 2. - 10.0), 5.).extend(1.0),
-                    ..default()
-                },
-                sprite: Sprite {
-                    custom_size: Some(FERRIS_BULLET_FLASH_SIZE),
-                    ..default()
-                },
-                texture: sprites.get("FERRIS_BULLET_FLASH".to_string()),
-                ..default()
-            })
-            .insert(DespawnTimer(Timer::from_seconds(FERRIS_BULLET_FLASH_DURATION_IN_SECONDS, false)))
-            .id();
+        // let bullet_flash = commands
+        //     .spawn()
+        //     .insert_bundle(SpriteBundle {
+        //         transform: Transform {
+        //             translation: Vec2::new(offset * (SHIP_SIZE.x / 2. - 10.0), 5.).extend(1.0),
+        //             ..default()
+        //         },
+        //         sprite: Sprite {
+        //             custom_size: Some(FERRIS_BULLET_FLASH_SIZE),
+        //             ..default()
+        //         },
+        //         texture: sprites.get("FERRIS_BULLET_FLASH".to_string()),
+        //         ..default()
+        //     })
+        //     .insert(DespawnTimer(Timer::from_seconds(FERRIS_BULLET_FLASH_DURATION_IN_SECONDS, false)))
+        //     .id();
         
-        commands.entity(ship).add_child(bullet_flash);
+        // commands.entity(ship).add_child(bullet_flash);
     }
 }
 
