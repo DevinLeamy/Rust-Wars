@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use std::{time::Duration, collections::HashMap};
+use std::collections::HashMap;
 
-use crate::{player::{SHIP_BULLET_IMAGE_SIZE, SHIP_BULLET_SIZE}, aliens::{ALIEN_BULLET_COLOR, ALIEN_BULLET_SPEED}};
+use crate::{player::{SHIP_BULLET_SIZE}, aliens::{ALIEN_BULLET_SPEED}};
 
 pub const TIME_STEP: f32 = 1.0 / 60.0;
 pub const CAMERA_LEVEL: f32 = 1.0;
@@ -19,7 +19,7 @@ pub const RIGHT_WALL: f32 = WINDOW_WIDTH / 2.;
 pub const WALL_THICKNESS: f32 = 10.;
 
 // bullet 
-pub const BULLET_SIZE: Vec2 = Vec2::new(4.0, 15.0);
+pub const BULLET_SIZE: Vec2 = Vec2::new(20.0, 40.0);
 pub const SHIP_BULLET_SPEED: f32 = 350.0;
 pub const SHIP_BULLET_INITIAL_GAP: f32 = 5.;
 pub const BULLET_LAYER: f32 = 1.0;
@@ -39,11 +39,16 @@ pub const SCOREBOARD_PADDING_LEFT: Val = Val::Px(10.0);
 pub const EXPLOSION_SIZE: f32 = 0.3;
 pub const EXPLOSION_FRAME_DURATION_IN_MILLIS: u64 = 20;
 
+#[derive(Component, Deref, DerefMut)]
+pub struct DespawnTimer(pub Timer);
+
 #[derive(Component, Debug, PartialEq, Eq)]
 pub struct Health(pub u32);
 
-#[derive(Component)]
-pub struct Collider;
+#[derive(Component, Deref)]
+pub struct Collider {
+    pub size: Vec2
+}
 
 #[derive(Component, Deref, DerefMut)]
 pub struct Velocity(pub Vec2);
@@ -88,23 +93,24 @@ pub struct BulletBundle {
 }
 
 impl BulletBundle {
-    pub fn from_alien(translation: Vec2) -> BulletBundle {
+    pub fn from_alien(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
         BulletBundle {
             sprite_bundle: SpriteBundle {
                 transform: Transform {
                     translation: translation.extend(BULLET_LAYER),
-                    scale: BULLET_SIZE.extend(1.0),
+                    scale: Vec3::splat(1.0),
                     ..default()
                 },
+                texture: sprite,
                 sprite: Sprite {
-                    color: ALIEN_BULLET_COLOR,
-                    ..default()
+                    custom_size: Some(BULLET_SIZE),
+                    ..default() 
                 },
                 ..default()
             },
             velocity: Velocity(Vec2::new(0.0, -ALIEN_BULLET_SPEED)),
             bullet: Bullet::Alien,
-            collider: Collider,
+            collider: Collider { size: BULLET_SIZE },
         }
     }
 
@@ -114,26 +120,19 @@ impl BulletBundle {
                 texture: sprite,
                 transform: Transform {
                     translation: translation.extend(BULLET_LAYER),
-                    scale: SHIP_BULLET_SIZE.extend(1.0),
+                    scale: Vec3::splat(1.0),
                     ..default()
                 },
-                sprite: generate_texture_sprite(SHIP_BULLET_SIZE, SHIP_BULLET_IMAGE_SIZE), 
+                sprite: Sprite {
+                    custom_size: Some(SHIP_BULLET_SIZE),
+                    ..default()
+                },
                 ..default()
             },
             velocity: Velocity(Vec2::new(0.0, SHIP_BULLET_SPEED)),
             bullet: Bullet::Ship,
-            collider: Collider,
+            collider: Collider { size: SHIP_BULLET_SIZE },
         }
-    }
-}
-
-pub fn generate_texture_sprite(entity_size: Vec2, texture_size: Vec2) -> Sprite {
-    let size_x = entity_size.x / texture_size.x * 10.0;
-    let size_y = entity_size.y / texture_size.y * 10.0;
-
-    Sprite {
-        custom_size: Some(Vec2::new(size_x, size_y) * Vec2::splat(1.4)),
-        ..default()
     }
 }
 
@@ -178,8 +177,7 @@ impl Animations {
 #[derive(Bundle)]
 pub struct WallBundle {
     #[bundle]
-    sprite_bundle: SpriteBundle,
-    collider: Collider,
+    sprite_bundle: SpriteBundle
 }
 
 
@@ -226,8 +224,7 @@ impl WallBundle {
                     ..default()
                 },
                 ..default()
-            },
-            collider: Collider,
+            }
         }
     }
 }

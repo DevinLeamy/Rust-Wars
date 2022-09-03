@@ -38,12 +38,9 @@ struct Explosion;
 fn main() {
     // stage for anything we want to do on a fixed timestep
     let mut fixedupdate = SystemStage::parallel();
-    fixedupdate.add_system(
-        update_bullets.run_in_state(GameState::Playing)
-    );
-    fixedupdate.add_system(
-        check_gameover.run_in_state(GameState::Playing)
-    );
+    fixedupdate.add_system(update_bullets.run_in_state(GameState::Playing));
+    fixedupdate.add_system(check_gameover.run_in_state(GameState::Playing));
+    fixedupdate.add_system(update_timed);
 
     App::new()
         .insert_resource(WindowDescriptor {
@@ -58,8 +55,8 @@ fn main() {
         .insert_resource(Animations::new())
         .insert_resource(Sprites::new())
         .add_plugins(DefaultPlugins)
-        .add_plugin(GameOverPlugin)
         .add_plugin(DebugPlugin)
+        .add_plugin(GameOverPlugin)
         .add_stage_before(
             CoreStage::Update,
             "FixedUpdate",
@@ -145,7 +142,7 @@ fn setup(
         .insert_bundle(
             TextBundle::from_sections([
                 TextSection::new(
-                    "DEFEAT THE BORROW CHECKER",
+                    "{ RustConf 2173 }",
                     TextStyle {
                         font_size: BACKGROUND_FONT_SIZE,
                         color: BACKGROUND_FONT_COLOR,
@@ -157,7 +154,7 @@ fn setup(
             .with_style(Style {
                 position_type: PositionType::Absolute,
                 position: UiRect {
-                    top: Val::Px(5.0),
+                    top: Val::Px(10.0),
                     right: Val::Px(10.0),
                     ..default()
                 },
@@ -256,5 +253,18 @@ fn update_bullets(mut bullet_query: Query<(&mut Transform, &Velocity), With<Bull
     for (mut transform, velocity) in &mut bullet_query {
         transform.translation.x += velocity.x * TIME_STEP;
         transform.translation.y += velocity.y * TIME_STEP;
+    }
+}
+
+fn update_timed(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut DespawnTimer)>
+) {
+    for (entity, mut despawn_timer) in query.iter_mut() {
+        despawn_timer.tick(Duration::from_secs_f32(TIME_STEP));
+
+        if despawn_timer.finished() {
+            commands.entity(entity).despawn();
+        }
     }
 }

@@ -9,8 +9,6 @@ use crate::{shared::*, Scoreboard, Explosion, GameState};
 
 
 // alien
-const ALIEN_IMAGE_SIZE: Vec2 = Vec2::new(1200.0, 800.0);
-pub const ALIEN_BULLET_COLOR: Color = Color::rgb(0.9, 0.0, 0.0);
 const ALIEN_ODD_ROW_OFFSET: f32 = 30.0;
 const ALIEN_WALL_GAP: f32 = 20.;
 pub const ALIEN_SIZE: Vec2 = Vec2::new(69.0, 46.);
@@ -21,6 +19,8 @@ const INITIAL_ALIEN_DIRECTION: f32 = 1.; // right
 const DESTROY_ALIEN_SCORE: u32 = 5;
 const MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.;
 pub const ALIEN_WALK_FRAME_DURATION_IN_MILLIS: u64 = 200;
+pub const BULLET_FLASH_SIZE: Vec2 = Vec2::new(35.0, 35.0);
+pub const BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.1;
 
 #[derive(Component)]
 pub struct Alien;
@@ -40,15 +40,25 @@ impl Plugin for AliensPlugin {
                 "Alien_FixedUpdate",
                 FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
             )
+            .add_startup_system(load_assets)
             .add_enter_system(GameState::Playing, spawn_aliens);
     }
 }
 
+fn load_assets(
+    asset_server: Res<AssetServer>,
+    mut sprites: ResMut<Sprites>
+) {
+    sprites.add("ALIEN_BULLET".to_string(), asset_server.load("images/alien_bullet/bullet.png"));
+    sprites.add("ALIEN_BULLET_FLASH".to_string(), asset_server.load("images/alien_bullet/bullet_flash.png"));
+    sprites.add("ALIEN_WALK_1".to_string(), asset_server.load("images/alien_ferris/walk_1.png"));
+    sprites.add("ALIEN_WALK_2".to_string(), asset_server.load("images/alien_ferris/walk_2.png"));
+}
+
 fn spawn_aliens(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut animations: ResMut<Animations>,
-    mut sprites: ResMut<Sprites>
+    sprites: Res<Sprites>
 ) {
     let alien_walk_1 = "ALIEN_WALK_1".to_string();
     let alien_walk_2 = "ALIEN_WALK_2".to_string(); 
@@ -60,9 +70,6 @@ fn spawn_aliens(
         )),
         image_data: ImageData::Images(vec![alien_walk_1.clone(), alien_walk_2.clone()])
     };
-
-    sprites.add(alien_walk_1.clone(), asset_server.load("images/alien_ferris/walk_1.png"));
-    sprites.add(alien_walk_2.clone(), asset_server.load("images/alien_ferris/walk_2.png"));
 
     animations.add("ALIEN_WALK".to_string(), alien_animation);
 
@@ -91,29 +98,34 @@ fn spawn_aliens(
                 .insert_bundle(SpriteBundle {
                     transform: Transform {
                         translation: Vec3::new(alien_x, alien_y, 0.0),
-                        scale: ALIEN_SIZE.extend(1.0),
+                        scale: Vec3::splat(1.0),
                         ..default()
                     },
-                    sprite: generate_texture_sprite(ALIEN_SIZE, ALIEN_IMAGE_SIZE), 
+                    sprite: Sprite {
+                        custom_size: Some(ALIEN_SIZE),
+                        ..default()
+                    }, 
                     texture: sprites.get(alien_walk_1.clone()),
                     ..default()
                 })
+                .insert(Name::new("Alien"))
                 .insert(animations.get("ALIEN_WALK".to_string()).animation)
                 .insert(ShootingCooldown(Timer::from_seconds(random::<f32>() * MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS, false)))
                 .insert(Velocity(Vec2::new(ALIEN_SPEED * INITIAL_ALIEN_DIRECTION, 0.0)))
                 .insert(AnimationState::default())
-                .insert(Collider);
+                .insert(Collider { size: ALIEN_SIZE });
         }
     }
 }
 
 fn update_aliens(
-    mut alien_query: Query<(&mut Transform, &mut Velocity, &mut ShootingCooldown), With<Alien>>,
-    mut commands: Commands
+    mut alien_query: Query<(Entity, &mut Transform, &mut Velocity, &mut ShootingCooldown), With<Alien>>,
+    mut commands: Commands,
+    sprites: Res<Sprites>
 ) {
     let alien_forward_shift = ALIEN_ALIEN_GAP.y / 2. + ALIEN_SIZE.y / 2.;
 
-    for (mut transform, mut velocity, mut shooting_cooldown) in &mut alien_query {
+    for (alien_entity, mut transform, mut velocity, mut shooting_cooldown) in &mut alien_query {
         transform.translation.x += velocity.x * TIME_STEP;
         transform.translation.y += velocity.y * TIME_STEP;
 
@@ -130,19 +142,46 @@ fn update_aliens(
         // update cooldown timer
         if shooting_cooldown.finished() {
             let bullet_x;
-        
+            let shoot_left = random::<f32>() < 0.5;
+
             // randomly shoot from left or right extent
-            if random::<f32>() < 0.5 {
-                bullet_x = transform.translation.x + ALIEN_SIZE.x / 2.;
-            } else {
+            if shoot_left {
                 bullet_x = transform.translation.x - ALIEN_SIZE.x / 2.;
+            } else {
+                bullet_x = transform.translation.x + ALIEN_SIZE.x / 2.;
             } 
 
-            let bullet_y = transform.translation.y - ALIEN_SIZE.y / 2.; 
+            let bullet_y = transform.translation.y - ALIEN_SIZE.y / 4.; 
 
             commands
                 .spawn()
-                .insert_bundle(BulletBundle::from_alien(Vec2::new(bullet_x, bullet_y)));
+                .insert_bundle(BulletBundle::from_alien(
+                    Vec2::new(bullet_x, bullet_y),
+                    sprites.get("ALIEN_BULLET".to_string())
+                ));
+            
+            let bullet_flash = commands
+                .spawn()
+                .insert_bundle(SpriteBundle {
+                    transform: Transform {
+                        translation: if shoot_left {
+                            Vec2::new(-ALIEN_SIZE.x / 2., 0.).extend(1.0)
+                        } else {
+                            Vec2::new(ALIEN_SIZE.x / 2., 0.).extend(1.0)
+                        },
+                        ..default()
+                    },
+                    sprite: Sprite {
+                        custom_size: Some(BULLET_FLASH_SIZE),
+                        ..default()
+                    },
+                    texture: sprites.get("ALIEN_BULLET_FLASH".to_string()),
+                    ..default()
+                })
+                .insert(DespawnTimer(Timer::from_seconds(BULLET_FLASH_DURATION_IN_SECONDS, false)))
+                .id();
+            
+            commands.entity(alien_entity).add_child(bullet_flash);
 
             shooting_cooldown.reset();
             shooting_cooldown.set_duration(Duration::from_secs_f32(random::<f32>() * MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS))
@@ -154,25 +193,25 @@ fn update_aliens(
 
 fn check_for_alien_collisions(
     mut scoreboard: ResMut<Scoreboard>,
-    alien_query: Query<(Entity, &Transform), With<Alien>>, 
-    bullet_query: Query<(Entity, &Bullet, &Transform)>,
+    alien_query: Query<(Entity, &Transform, &Collider), With<Alien>>, 
+    bullet_query: Query<(Entity, &Bullet, &Transform, &Collider)>,
     animations: Res<Animations>,
     mut commands: Commands,
 ) {
-    for (alien_entity, transform) in &alien_query {
-        for (bullet_entity, bullet, bullet_transform) in &bullet_query {
+    for (alien_entity, transform, alien_collider) in &alien_query {
+        for (bullet_entity, bullet, bullet_transform, bullet_collider) in &bullet_query {
             if bullet == &Bullet::Alien {
                 // ignore bullets from other aliens
                 continue;
             }
             if let Some(_collision) = collide(
                 transform.translation,
-                transform.scale.truncate(),
+                alien_collider.size,
                 bullet_transform.translation,
-                bullet_transform.scale.truncate(),
+                bullet_collider.size
             ) {
-                commands.entity(bullet_entity).despawn();
-                commands.entity(alien_entity).despawn();
+                commands.entity(bullet_entity).despawn_recursive();
+                commands.entity(alien_entity).despawn_recursive();
 
                 let explosion = animations.get("EXPLOSION".to_string());
                 let texture_atlas = match &explosion.image_data { 

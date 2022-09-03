@@ -5,6 +5,10 @@ publish = false
 authors = ["Devin Leamy"] 
 edition = "2021"
 
+[features]
+debug = []
+
+
 [dependencies]
 bevy = "0.8.1"
 rand = "0.8.3"

@@ -1,12 +1,10 @@
 use benimator::FrameRate;
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use rand::random;
-use crate::{shared::*, aliens::ALIEN_SIZE, GameState};
+use crate::{shared::*, GameState};
 use std::time::Duration;
 use iyes_loopless::prelude::*;
 
-pub const SHIP_BULLET_IMAGE_SIZE: Vec2 = Vec2::new(512.0, 512.0);
-const SHIP_IMAGE_SIZE: Vec2 = Vec2::new(1200.0, 800.0);
 const SHIP_SIZE: Vec2 = Vec2::new(120., 80.);
 const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 5.0;
 const SHIP_SPEED: f32 = 450.;
@@ -55,21 +53,21 @@ impl Plugin for PlayerPlugin {
 
 fn check_for_ship_collisions(
     mut commands: Commands,
-    mut ship_query: Query<(&Transform, &mut Health, &mut FerrisState), With<Ship>>,
-    bullet_query: Query<(Entity, &Transform, &Bullet)>,
+    mut ship_query: Query<(&Transform, &mut Health, &Collider, &mut FerrisState), With<Ship>>,
+    bullet_query: Query<(Entity, &Transform, &Bullet, &Collider)>,
 ) {
-    let (ship_transform, mut health, mut ferris_state) = ship_query.single_mut();
+    let (ship_transform, mut health, ship_collider, mut ferris_state) = ship_query.single_mut();
 
-    for (bullet_entity, bullet_transform, bullet) in bullet_query.iter() {
+    for (bullet_entity, bullet_transform, bullet, bullet_collider) in bullet_query.iter() {
         if bullet == &Bullet::Ship {
             // ignore bullets from the ship 
             continue;
         }
         if let Some(_collision) = collide(
             ship_transform.translation,
-            ship_transform.scale.truncate(),
+            ship_collider.size,
             bullet_transform.translation,
-            bullet_transform.scale.truncate(),
+            bullet_collider.size,
         ) {
             commands.entity(bullet_entity).despawn();
             health.0 -= 1;
@@ -162,17 +160,19 @@ fn spawn_player(
          .insert_bundle(SpriteBundle {
              transform: Transform {
                  translation: Vec3::new(0.0, ship_y, 0.0),
-                 scale: SHIP_SIZE.extend(1.0),
                  ..default()
              },
-             sprite: generate_texture_sprite(ALIEN_SIZE, SHIP_IMAGE_SIZE), 
+             sprite: Sprite {
+                custom_size: Some(SHIP_SIZE),
+                ..default()
+             },
              texture: sprites.get("HAPPY_FERRIS".to_string()),
              ..default()
          })
          .insert(animations.get("FERRIS_WALK".to_string()).animation)
          .insert(AnimationState::default())
          .insert(FerrisState::IDLE)
-         .insert(Collider);
+         .insert(Collider { size: SHIP_SIZE });
 }
 
 fn update_ship(
