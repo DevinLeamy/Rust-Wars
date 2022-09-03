@@ -1,7 +1,7 @@
 use benimator::FrameRate;
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use rand::random;
-use crate::{shared::*, GameState};
+use crate::{shared::*, GameState, aliens::{BULLET_FLASH_SIZE, BULLET_FLASH_DURATION_IN_SECONDS}};
 use std::time::Duration;
 use iyes_loopless::prelude::*;
 
@@ -16,6 +16,9 @@ pub const SHIP_WALK_FRAME_DURATION_IN_MILLIS: u64 = 200;
 const HEART_SIZE: Vec2 = Vec2::new(30., 30.);
 const HEART_CORNER_OFFSET: Vec2 = Vec2::new(25., 25.);
 const HEART_PADDING_RIGHT: f32 = 10.0;
+
+const FERRIS_BULLET_FLASH_SIZE: Vec2 = Vec2::new(120.0, 120.0);
+const FERRIS_BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.2;
 
 #[derive(Component)]
 pub struct Ship;
@@ -46,6 +49,7 @@ impl Plugin for PlayerPlugin {
                 "Player_FixedUpdate",
                 FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
             )
+            .add_startup_system(load_assets)
             .add_enter_system(GameState::Playing, spawn_ship_health_display)
             .add_enter_system(GameState::Playing, spawn_player);
     }
@@ -80,13 +84,17 @@ fn check_for_ship_collisions(
     }
 }
 
+fn load_assets(asset_server: Res<AssetServer>, mut sprites: ResMut<Sprites>) {
+    sprites.add("HEART".to_string(), asset_server.load("images/heart.png"));
+    sprites.add("ALARMED_FERRIS".to_string(), asset_server.load("images/alarmed_ferris.png"));
+    sprites.add("HAPPY_FERRIS".to_string(), asset_server.load("images/ferris.png"));
+    sprites.add("FERRIS_BULLET_FLASH".to_string(), asset_server.load("images/ferris_bullet_flash.png"));
+}
+
 fn spawn_ship_health_display(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut sprites: ResMut<Sprites>
+    sprites: ResMut<Sprites>
 ) {
-    sprites.add("HEART".to_string(), asset_server.load("images/heart.png"));
-
     let first_heart_offset = Vec2::new(LEFT_WALL + HEART_CORNER_OFFSET.x, TOP_WALL - HEART_CORNER_OFFSET.y); 
     let heart_horizontal_gap = HEART_PADDING_RIGHT + HEART_SIZE.x;
 
@@ -134,8 +142,7 @@ fn spawn_player(
     mut sprites: ResMut<Sprites>,
     mut animations: ResMut<Animations>
 ) {
-    sprites.add("ALARMED_FERRIS".to_string(), asset_server.load("images/alarmed_ferris.png"));
-    sprites.add("HAPPY_FERRIS".to_string(), asset_server.load("images/ferris.png"));
+
 
     let ferris_walk_animation = Animation {
         animation: BAnimation(benimator::Animation::from_indices(
@@ -177,11 +184,11 @@ fn spawn_player(
 
 fn update_ship(
     keyboard_input: Res<Input<KeyCode>>, 
-    mut query: Query<(Entity, &mut Transform, &mut FerrisState, Option<&mut ShootingCooldown>), With<Ship>>, 
+    mut query: Query<(Entity, &mut Transform, &mut FerrisState, Option<&mut ShootingCooldown>, &Collider), With<Ship>>, 
     sprites: Res<Sprites>,
     mut commands: Commands
 ) {
-    let (ship, mut transform, mut state, mut shooting_cooldown) = query.single_mut(); 
+    let (ship, mut transform, mut state, mut shooting_cooldown, collider) = query.single_mut(); 
 
     if *state == FerrisState::DEAD {
         return;
@@ -206,8 +213,8 @@ fn update_ship(
     transform.translation.x += direction * SHIP_SPEED * TIME_STEP;
 
     transform.translation.x = transform.translation.x.clamp(
-        LEFT_WALL + transform.scale.x / 2.0 + WALL_THICKNESS,
-        RIGHT_WALL - transform.scale.x / 2.0 - WALL_THICKNESS
+        LEFT_WALL + collider.size.x / 2.0 + WALL_THICKNESS,
+        RIGHT_WALL - collider.size.x / 2.0 - WALL_THICKNESS
     );
 
     // update cooldown timer
@@ -220,15 +227,8 @@ fn update_ship(
     }
 
     if shoot && shooting_cooldown.is_none() {
-        let bullet_x;
-        
-        // randomly shoot from left or right extent
-        if random::<f32>() < 0.5 {
-            bullet_x = transform.translation.x + SHIP_SIZE.x / 2.;
-        } else {
-            bullet_x = transform.translation.x - SHIP_SIZE.x / 2.;
-        } 
-
+        let offset = if random::<f32>() < 0.5 { 1.0 } else { -1.0 };
+        let bullet_x = transform.translation.x + offset * SHIP_SIZE.x / 2.;
         let bullet_y = transform.translation.y + transform.scale.y / 2. + SHIP_BULLET_INITIAL_GAP;
 
         commands
@@ -241,6 +241,25 @@ fn update_ship(
                 Vec2::new(bullet_x, bullet_y), 
                 sprites.get("FERRIS_BULLET".to_string())
             ));
+        
+        let bullet_flash = commands
+            .spawn()
+            .insert_bundle(SpriteBundle {
+                transform: Transform {
+                    translation: Vec2::new(offset * (SHIP_SIZE.x / 2. - 10.0), 5.).extend(1.0),
+                    ..default()
+                },
+                sprite: Sprite {
+                    custom_size: Some(FERRIS_BULLET_FLASH_SIZE),
+                    ..default()
+                },
+                texture: sprites.get("FERRIS_BULLET_FLASH".to_string()),
+                ..default()
+            })
+            .insert(DespawnTimer(Timer::from_seconds(FERRIS_BULLET_FLASH_DURATION_IN_SECONDS, false)))
+            .id();
+        
+        commands.entity(ship).add_child(bullet_flash);
     }
 }
 

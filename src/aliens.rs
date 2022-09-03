@@ -45,10 +45,7 @@ impl Plugin for AliensPlugin {
     }
 }
 
-fn load_assets(
-    asset_server: Res<AssetServer>,
-    mut sprites: ResMut<Sprites>
-) {
+fn load_assets(asset_server: Res<AssetServer>, mut sprites: ResMut<Sprites>) {
     sprites.add("ALIEN_BULLET".to_string(), asset_server.load("images/alien_bullet/bullet.png"));
     sprites.add("ALIEN_BULLET_FLASH".to_string(), asset_server.load("images/alien_bullet/bullet_flash.png"));
     sprites.add("ALIEN_WALK_1".to_string(), asset_server.load("images/alien_ferris/walk_1.png"));
@@ -141,16 +138,8 @@ fn update_aliens(
 
         // update cooldown timer
         if shooting_cooldown.finished() {
-            let bullet_x;
-            let shoot_left = random::<f32>() < 0.5;
-
-            // randomly shoot from left or right extent
-            if shoot_left {
-                bullet_x = transform.translation.x - ALIEN_SIZE.x / 2.;
-            } else {
-                bullet_x = transform.translation.x + ALIEN_SIZE.x / 2.;
-            } 
-
+            let offset = if random::<f32>() < 0.5 { 1.0 } else { -1.0 };
+            let bullet_x = transform.translation.x + offset * ALIEN_SIZE.x / 2.;
             let bullet_y = transform.translation.y - ALIEN_SIZE.y / 4.; 
 
             commands
@@ -164,11 +153,7 @@ fn update_aliens(
                 .spawn()
                 .insert_bundle(SpriteBundle {
                     transform: Transform {
-                        translation: if shoot_left {
-                            Vec2::new(-ALIEN_SIZE.x / 2., 0.).extend(1.0)
-                        } else {
-                            Vec2::new(ALIEN_SIZE.x / 2., 0.).extend(1.0)
-                        },
+                        translation: Vec2::new(offset * ALIEN_SIZE.x / 2., 0.).extend(1.0),
                         ..default()
                     },
                     sprite: Sprite {

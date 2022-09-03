@@ -1,7 +1,7 @@
 use std::time::Duration;
 use benimator::FrameRate;
 
-use bevy::{prelude::*, sprite::collide_aabb::collide};
+use bevy::prelude::*;
 use iyes_loopless::prelude::*;
 
 mod player;

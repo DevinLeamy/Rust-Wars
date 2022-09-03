@@ -11,7 +11,7 @@ pub const WINDOW_WIDTH: f32 = 920.;
 pub const WINDOW_HEIGHT: f32 = 920.;
 
 // walls
-pub const WALL_COLOR: Color = Color::rgb(0.7, 0.7, 0.7);
+pub const WALL_COLOR: Color = Color::rgb(0.0, 0.0, 0.0);
 pub const BOTTOM_WALL: f32 = -WINDOW_HEIGHT / 2.;
 pub const TOP_WALL: f32 = WINDOW_HEIGHT / 2.;
 pub const LEFT_WALL: f32 = -WINDOW_WIDTH / 2.;
