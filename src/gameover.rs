@@ -32,10 +32,18 @@ fn create_gameover_screen(
         .insert_bundle(
             TextBundle::from_sections([
                 TextSection::new(
-                    "GAME OVER",
+                    "GAME OVER\n",
                     TextStyle {
                         font_size: 40.0, 
                         color: Color::rgb(0.8, 0.0, 0.0),
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    },
+                ),
+                TextSection::new(
+                    "[R] To Retry\n[ESC] To Quit",
+                    TextStyle {
+                        font_size: 30.0, 
+                        color: Color::rgb(1.0, 1.0, 1.0),
                         font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                     },
                 ),
