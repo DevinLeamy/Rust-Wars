@@ -59,7 +59,7 @@ impl Rylo {
 
                 commands.spawn().insert_bundle(BulletBundle::from_rylo(
                     Vec2::new(bullet_x, bullet_y),
-                    sprites.get("ALIEN_BULLET".to_string()),
+                    sprites.get("RYLO_BULLET".to_string()),
                 ));
 
                 let bullet_flash = commands
@@ -73,7 +73,7 @@ impl Rylo {
                             custom_size: Some(BULLET_FLASH_SIZE),
                             ..default()
                         },
-                        texture: sprites.get("ALIEN_BULLET_FLASH".to_string()),
+                        texture: sprites.get("RYLO_BULLET_FLASH".to_string()),
                         ..default()
                     })
                     .insert(DespawnTimer(Timer::from_seconds(
@@ -197,6 +197,14 @@ fn load_assets(
     sprites.add(
         "RYLO_ALIEN".to_string(),
         asset_server.load("images/unsafe_ferris_2.png"),
+    );
+    sprites.add(
+        "RYLO_BULLET_FLASH".to_string(),
+        asset_server.load("images/rylo_bullet_flash.png"),
+    );
+    sprites.add(
+        "RYLO_BULLET".to_string(),
+        asset_server.load("images/rylo_bullet.png"),
     );
 
     let alien_animation = Animation {
