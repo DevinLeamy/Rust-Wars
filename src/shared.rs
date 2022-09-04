@@ -93,7 +93,6 @@ impl Sprites {
     }
 }
 
-
 #[derive(Bundle)]
 pub struct BulletBundle {
     #[bundle]

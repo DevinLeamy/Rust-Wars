@@ -1,22 +1,23 @@
 use std::{time::Duration};
 use benimator::FrameRate;
+use bevy_tweening::{*, lens::TransformPositionLens}; 
 use rand::*;
 
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use iyes_loopless::prelude::*;
 
-use crate::{shared::*, Scoreboard, Explosion, GameState};
+use crate::{shared::*, Scoreboard, Explosion, GameState, LOAD_WAVE_DURATION_IN_SECONDS};
 
 // Alien::Aris alien
 const ALIEN_ODD_ROW_OFFSET: f32 = 30.0;
-const ALIEN_WALL_GAP: f32 = 20.;
-pub const ALIEN_SIZE: Vec2 = Vec2::new(69.0, 46.);
+const ALIEN_WALL_GAP: Vec2 = Vec2::new(20.0, 20.0);
+pub const ALIEN_SIZE: Vec2 = Vec2::new(60.0, 40.);
 const ALIEN_SPEED: f32 = 75.;
-const ALIEN_ALIEN_GAP: Vec2 = Vec2::new(30., 50.);
+const ALIEN_ALIEN_GAP: Vec2 = Vec2::new(20., 40.);
 pub const ALIEN_BULLET_SPEED: f32 = 300.0;
 const INITIAL_ALIEN_DIRECTION: f32 = 1.; // right
 const DESTROY_ALIEN_SCORE: u32 = 5;
-const MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.;
+const MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 10.;
 pub const ALIEN_WALK_FRAME_DURATION_IN_MILLIS: u64 = 200;
 pub const BULLET_FLASH_SIZE: Vec2 = Vec2::new(35.0, 35.0);
 pub const BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.1;
@@ -34,7 +35,9 @@ impl Plugin for AliensPlugin {
         let mut fixedupdate = SystemStage::parallel();
         fixedupdate.add_system(update_aliens.run_in_state(GameState::Playing));
         fixedupdate.add_system(update_alien_animations.run_in_state(GameState::Playing));
+        fixedupdate.add_system(update_alien_animations.run_in_state(GameState::LoadWaveState));
         fixedupdate.add_system(check_for_alien_collisions.run_in_state(GameState::Playing));
+        // fixedupdate.add_system(update_targeted_aliens);
 
         app
             .add_stage_before(
@@ -97,27 +100,47 @@ impl AlienBundle {
 }
 
 fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
-    let first_alien_x = LEFT_WALL + ALIEN_WALL_GAP + ALIEN_SIZE.x / 2.;
-    let first_alien_y = TOP_WALL - ALIEN_WALL_GAP  - ALIEN_SIZE.y / 2. - 80.;
+    let first_alien_x = LEFT_WALL + ALIEN_WALL_GAP.x + ALIEN_SIZE.x / 2.;
+    let first_alien_y = TOP_WALL - ALIEN_WALL_GAP.y - ALIEN_SIZE.y / 2. - 80.;
 
     let total_alien_width = ALIEN_SIZE.x + ALIEN_ALIEN_GAP.x;
     let total_alien_height = ALIEN_SIZE.y + ALIEN_ALIEN_GAP.y;
 
     // spawn aliens
     for row in 0..5 {
-        for col in 0..(5 + row % 2) {
+        if row == 2 {
+            continue;
+        }
+        for col in 0..(9 + row % 2) {
+            if (row == 1 || row == 3) && col % 3 == 0 {
+                continue;
+            }
             let alien_x = first_alien_x + col as f32 * total_alien_width - ALIEN_ODD_ROW_OFFSET * ((row % 2) as f32); 
             let alien_y = first_alien_y - row as f32 * total_alien_height; 
+
+            let starting_x = LEFT_WALL + (random::<f32>() * WINDOW_WIDTH);
+            let starting_y = BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT);
+
+            let position_tween = Tween::new(
+                EaseFunction::QuadraticInOut,
+                TweeningType::Once,
+                Duration::from_secs_f32(LOAD_WAVE_DURATION_IN_SECONDS * f32::min(1.0, random::<f32>() + 0.25)),
+                TransformPositionLens {
+                    start: Vec3::new(starting_x, starting_y, 0.0),
+                    end: Vec3::new(alien_x, alien_y, 0.0),
+                },
+            );
 
             commands
                 .spawn()
                 .insert_bundle(AlienBundle::new_aris(
                     ALIEN_SIZE,
-                    Vec2::new(alien_x, alien_y),
+                    Vec2::new(starting_x, starting_y),
                     MAX_ALIEN_SHOOTING_COOLDOWN_IN_SECONDS,
                     Vec2::new(ALIEN_SPEED * INITIAL_ALIEN_DIRECTION, 0.0),
                     sprites.get("ALIEN_WALK_1".to_string()) 
                 ))
+                .insert(Animator::new(position_tween))
                 .insert(animations.get("ALIEN_WALK".to_string()).animation)
                 .insert(AnimationState::default());
         }
@@ -133,18 +156,18 @@ fn spawn_aliens(commands: Commands, animations: Res<Animations>, sprites: Res<Sp
 }
 
 fn update_aliens(
-    mut alien_query: Query<(Entity, &mut Transform, &mut Velocity, &mut ShootingCooldown), With<Alien>>,
+    mut alien_query: Query<(Entity, &mut Transform, &mut Velocity, &mut ShootingCooldown, &Collider), With<Alien>>,
     mut commands: Commands,
     sprites: Res<Sprites>
 ) {
     let alien_forward_shift = ALIEN_ALIEN_GAP.y / 2. + ALIEN_SIZE.y / 2.;
 
-    for (alien_entity, mut transform, mut velocity, mut shooting_cooldown) in &mut alien_query {
+    for (alien_entity, mut transform, mut velocity, mut shooting_cooldown, collider) in &mut alien_query {
         transform.translation.x += velocity.x * TIME_STEP;
         transform.translation.y += velocity.y * TIME_STEP;
 
-        let left_most_side = transform.translation.x - transform.scale.x / 2.;
-        let right_most_side = transform.translation.x + transform.scale.x / 2.;
+        let left_most_side = transform.translation.x - collider.size.x / 2.;
+        let right_most_side = transform.translation.x + collider.size.x / 2.;
 
         // Wall checks are intentionally done this way.
         // Gives the impression of shifting off and then back onto the screen.

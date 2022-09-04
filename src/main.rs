@@ -2,6 +2,7 @@ use std::time::Duration;
 use benimator::FrameRate;
 
 use bevy::prelude::*;
+use bevy_tweening::TweeningPlugin;
 use iyes_loopless::prelude::*;
 
 mod player;
@@ -22,6 +23,10 @@ use gameover::GameOverPlugin;
 mod launch;
 use launch::MenuPlugin;
 
+const LOAD_WAVE_DURATION_IN_SECONDS: f32 = 3.0;
+
+#[derive(Deref, DerefMut)]
+struct LoadWaveTimer(Timer);
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 enum GameState {
@@ -47,11 +52,11 @@ pub enum TurboStages {
 }
 
 fn main() {
-    // stage for anything we want to do on a fixed timestep
     let mut fixedupdate = SystemStage::parallel();
-        fixedupdate.add_system(update_bullets.run_in_state(GameState::Playing));
-        fixedupdate.add_system(check_gameover.run_in_state(GameState::Playing));
-        fixedupdate.add_system(update_timed);
+    fixedupdate.add_system(update_bullets.run_in_state(GameState::Playing));
+    fixedupdate.add_system(check_gameover.run_in_state(GameState::Playing));
+    fixedupdate.add_system(update_load_wave.run_in_state(GameState::LoadWaveState));
+    fixedupdate.add_system(update_timed);
 
     App::new()
         .insert_resource(WindowDescriptor {
@@ -73,17 +78,22 @@ fn main() {
         // resources
         .insert_resource(Animations::new())
         .insert_resource(Sprites::new())
+        .insert_resource(Scoreboard { score: 0 })
+
         // plugins
+        .add_plugin(TweeningPlugin)
         .add_plugin(DebugPlugin)
         .add_plugin(MenuPlugin)
         .add_plugin(GameOverPlugin)
-
-        .add_enter_system(GameState::Playing, reset_scoreboard)
         .add_plugin(PlayerPlugin)
         .add_plugin(AliensPlugin)
         .add_plugin(AnimationPlugin::default())
-        .insert_resource(Scoreboard { score: 0 })
+
         .add_startup_system(setup)
+        
+        .add_enter_system(GameState::Playing, reset_scoreboard)
+        .add_enter_system(GameState::LoadWaveState, setup_load_wave)
+
         .add_system(update_scoreboard)
         .add_system(update_explosions)
         .add_system(bevy::window::close_on_esc)
@@ -271,15 +281,26 @@ fn update_bullets(mut bullet_query: Query<(&mut Transform, &Velocity), With<Bull
     }
 }
 
-fn update_timed(
-    mut commands: Commands,
-    mut query: Query<(Entity, &mut DespawnTimer)>
-) {
+fn update_timed(mut commands: Commands, mut query: Query<(Entity, &mut DespawnTimer)>) {
     for (entity, mut despawn_timer) in query.iter_mut() {
         despawn_timer.tick(Duration::from_secs_f32(TIME_STEP));
 
         if despawn_timer.finished() {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+fn setup_load_wave(mut commands: Commands) {
+    commands.insert_resource(LoadWaveTimer(
+        Timer::from_seconds(LOAD_WAVE_DURATION_IN_SECONDS, false)
+    ));
+}
+
+fn update_load_wave(mut commands: Commands, mut timer: ResMut<LoadWaveTimer>) {
+    timer.tick(Duration::from_secs_f32(TIME_STEP));
+
+    if timer.finished() {
+        commands.insert_resource(NextState(GameState::Playing));
     }
 }

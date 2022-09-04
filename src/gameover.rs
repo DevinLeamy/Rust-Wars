@@ -63,14 +63,11 @@ fn create_gameover_screen(
 }
 
 
-fn update_gameover_menu(
-    mut commands: Commands,
-    keyboard_input: Res<Input<KeyCode>>, 
-) {
+fn update_gameover_menu(mut commands: Commands, keyboard_input: Res<Input<KeyCode>>) {
     let restart = keyboard_input.pressed(KeyCode::R);
 
     if restart {
-        commands.insert_resource(NextState(GameState::Playing));
+        commands.insert_resource(NextState(GameState::LoadWaveState));
     }
 }
 
