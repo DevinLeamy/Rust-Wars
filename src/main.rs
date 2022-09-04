@@ -30,9 +30,9 @@ struct LoadWaveTimer(Timer);
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 enum GameState {
-    Menu,           // Game menu (press space to play)
-    Playing,        // Player and enemies can move and shoot
-    GameOver,       // Player is frozen and enemies have been despawned (press r to restart)
+    Menu,                // Game menu (press space to play)
+    Playing,             // Player and enemies can move and shoot
+    GameOver,            // Player is frozen and enemies have been despawned (press r to restart)
     LoadWaveState,  // Load enemies into the scene (player and enemies cannot shoot)
 }
 
@@ -49,6 +49,31 @@ struct Explosion;
 #[derive(StageLabel)]
 pub enum TurboStages {
     FixedUpdate
+}
+
+pub struct Global {
+    is_playing: bool,
+    wave: Option<u32>,
+}
+
+impl Global {
+    pub fn current_wave(&self) -> u32 {
+        self.wave.unwrap()
+    }
+
+    pub fn start_playing(&mut self) {
+        self.is_playing = true;
+        self.wave = Some(0);
+    }
+
+    pub fn wave_cleared(&mut self) {
+        self.wave = Some(self.wave.unwrap() + 1);
+    }
+
+    pub fn stop_playing(&mut self) {
+        self.is_playing = false;
+        self.wave = None;
+    }
 }
 
 fn main() {
@@ -91,8 +116,9 @@ fn main() {
 
         .add_startup_system(setup)
         
-        .add_enter_system(GameState::Playing, reset_scoreboard)
-        .add_enter_system(GameState::LoadWaveState, setup_load_wave)
+        .add_exit_system(GameState::LoadWaveState, reset_scoreboard)
+        .add_system(check_wave_end.run_in_state(GameState::Playing))
+        .add_enter_system(GameState::LoadWaveState, setup_load_wave.before(reset_scoreboard))
 
         .add_system(update_scoreboard)
         .add_system(update_explosions)
@@ -107,6 +133,11 @@ fn setup(
     mut animations: ResMut<Animations>,
     mut sprites: ResMut<Sprites>
 ) {
+    commands.insert_resource(Global {
+        is_playing: false,
+        wave: None
+    });
+
     commands.spawn_bundle(Camera2dBundle {
         transform: Transform {
             translation: Vec3::new(0.0, 0.0, CAMERA_LEVEL),
@@ -232,13 +263,15 @@ fn update_explosions(
     }
 }
 
-fn reset_scoreboard(mut scoreboard: ResMut<Scoreboard>) {
-    scoreboard.score = 0;
+fn reset_scoreboard(mut scoreboard: ResMut<Scoreboard>, global: Res<Global>) {
+    // Only reset the scoreboard if we're entering the first wave
+    if global.current_wave() == 0 {
+        scoreboard.score = 0;
+    }
 }
 
 fn check_gameover(
-    alien_query: Query<&Transform, With<Alien>>, 
-    ship_query: Query<(&Transform, &Health), With<Ship>>,
+    ship_query: Query<&Health, With<Ship>>,
     game_state: Res<CurrentState<GameState>>,
     mut commands: Commands
 ) {
@@ -246,26 +279,17 @@ fn check_gameover(
         return;
     }
 
-    let mut gameover = false; 
-
-    if alien_query.is_empty() {
-        gameover = true;
-    }
-
-    let (ship_transform, ship_health) = ship_query.single();
-
-    for alien_transform in &alien_query {
-        if alien_transform.translation.y < ship_transform.translation.y {
-            gameover = true;
-        }
-    }
+    let ship_health = ship_query.single();
 
     if ship_health.0 == 0 {
-        gameover = true;
-    }
-
-    if gameover { 
         commands.insert_resource(NextState(GameState::GameOver));
+    }
+}
+
+fn check_wave_end(alien_query: Query<With<Alien>>, mut commands: Commands, mut global: ResMut<Global>) {
+    if alien_query.is_empty() {
+        global.wave_cleared();
+        commands.insert_resource(NextState(GameState::LoadWaveState));
     }
 }
 
@@ -291,7 +315,8 @@ fn update_timed(mut commands: Commands, mut query: Query<(Entity, &mut DespawnTi
     }
 }
 
-fn setup_load_wave(mut commands: Commands) {
+fn setup_load_wave(mut commands: Commands, mut global: ResMut<Global>) {
+    println!("Loading Wave: {}", global.current_wave());
     commands.insert_resource(LoadWaveTimer(
         Timer::from_seconds(LOAD_WAVE_DURATION_IN_SECONDS, false)
     ));
@@ -301,6 +326,7 @@ fn update_load_wave(mut commands: Commands, mut timer: ResMut<LoadWaveTimer>) {
     timer.tick(Duration::from_secs_f32(TIME_STEP));
 
     if timer.finished() {
+        println!("Starting Wave");
         commands.insert_resource(NextState(GameState::Playing));
     }
 }

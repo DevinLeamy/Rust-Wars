@@ -6,7 +6,7 @@ use rand::*;
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use iyes_loopless::prelude::*;
 
-use crate::{shared::*, Scoreboard, Explosion, GameState, LOAD_WAVE_DURATION_IN_SECONDS};
+use crate::{shared::*, Scoreboard, Explosion, GameState, LOAD_WAVE_DURATION_IN_SECONDS, Global};
 
 // Alien::Aris alien
 const ALIEN_ODD_ROW_OFFSET: f32 = 30.0;
@@ -37,7 +37,6 @@ impl Plugin for AliensPlugin {
         fixedupdate.add_system(update_alien_animations.run_in_state(GameState::Playing));
         fixedupdate.add_system(update_alien_animations.run_in_state(GameState::LoadWaveState));
         fixedupdate.add_system(check_for_alien_collisions.run_in_state(GameState::Playing));
-        // fixedupdate.add_system(update_targeted_aliens);
 
         app
             .add_stage_before(
@@ -99,7 +98,7 @@ impl AlienBundle {
     } 
 }
 
-fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
+fn wave_zero(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
     let first_alien_x = LEFT_WALL + ALIEN_WALL_GAP.x + ALIEN_SIZE.x / 2.;
     let first_alien_y = TOP_WALL - ALIEN_WALL_GAP.y - ALIEN_SIZE.y / 2. - 80.;
 
@@ -147,12 +146,16 @@ fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sp
     }
 }
 
-// fn wave_two(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
+fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
+    println!("Wave one");
+}
 
-// }
-
-fn spawn_aliens(commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
-    wave_one(commands, animations, sprites);    
+fn spawn_aliens(commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>, global: Res<Global>) {
+    match global.current_wave() {
+        0 => wave_zero(commands, animations, sprites), 
+        1 => wave_one(commands, animations, sprites),
+        _ => panic!("Wave not implemented") 
+    }
 }
 
 fn update_aliens(

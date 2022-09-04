@@ -49,7 +49,7 @@ impl Plugin for PlayerPlugin {
                 "Player_FixedUpdate",
                 FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
             )
-            .add_startup_system(load_assets)
+            .add_startup_system(load_assets_and_animations)
             .add_enter_system(GameState::Playing, spawn_ship_health_display)
             .add_enter_system(GameState::LoadWaveState, spawn_player);
     }
@@ -84,11 +84,23 @@ fn check_for_ship_collisions(
     }
 }
 
-fn load_assets(asset_server: Res<AssetServer>, mut sprites: ResMut<Sprites>) {
+fn load_assets_and_animations(asset_server: Res<AssetServer>, mut sprites: ResMut<Sprites>, mut animations: ResMut<Animations>) {
     sprites.add("HEART".to_string(), asset_server.load("images/heart.png"));
     sprites.add("ALARMED_FERRIS".to_string(), asset_server.load("images/alarmed_ferris.png"));
     sprites.add("HAPPY_FERRIS".to_string(), asset_server.load("images/ferris.png"));
     sprites.add("FERRIS_BULLET_FLASH".to_string(), asset_server.load("images/ferris_bullet_flash.png"));
+    sprites.add("FERRIS_WALK_1".to_string(), asset_server.load("images/ferris_walk/ferris_walk_1.png"));
+    sprites.add("FERRIS_WALK_2".to_string(), asset_server.load("images/ferris_walk/ferris_walk_2.png"));
+
+    let ferris_walk_animation = Animation {
+        animation: BAnimation(benimator::Animation::from_indices(
+            0..2,
+            FrameRate::from_frame_duration(Duration::from_millis(SHIP_WALK_FRAME_DURATION_IN_MILLIS))
+        )),
+        image_data: ImageData::Images(vec!["FERRIS_WALK_1".to_string(), "FERRIS_WALK_2".to_string()])
+    };
+
+    animations.add("FERRIS_WALK".to_string(), ferris_walk_animation);
 }
 
 fn spawn_ship_health_display(
@@ -138,22 +150,14 @@ fn update_health_display(
 
 fn spawn_player(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut sprites: ResMut<Sprites>,
-    mut animations: ResMut<Animations>
+    sprites: Res<Sprites>,
+    animations: Res<Animations>,
+    ship_query: Query<Entity, With<Ship>>
 ) {
-    let ferris_walk_animation = Animation {
-        animation: BAnimation(benimator::Animation::from_indices(
-            0..2,
-            FrameRate::from_frame_duration(Duration::from_millis(SHIP_WALK_FRAME_DURATION_IN_MILLIS))
-        )),
-        image_data: ImageData::Images(vec!["FERRIS_WALK_1".to_string(), "FERRIS_WALK_2".to_string()])
-    };
-
-    sprites.add("FERRIS_WALK_1".to_string(), asset_server.load("images/ferris_walk/ferris_walk_1.png"));
-    sprites.add("FERRIS_WALK_2".to_string(), asset_server.load("images/ferris_walk/ferris_walk_2.png"));
-
-    animations.add("FERRIS_WALK".to_string(), ferris_walk_animation);
+    if ship_query.get_single().is_ok() {
+        // ship has already been spawned
+        return;
+    }
 
      // ship 
      let ship_y = BOTTOM_WALL + GAP_BETWEEN_SHIP_AND_FLOOR + SHIP_SIZE.y / 2.;
@@ -239,25 +243,6 @@ fn update_ship(
                 Vec2::new(bullet_x, bullet_y), 
                 sprites.get("FERRIS_BULLET".to_string())
             ));
-        
-        // let bullet_flash = commands
-        //     .spawn()
-        //     .insert_bundle(SpriteBundle {
-        //         transform: Transform {
-        //             translation: Vec2::new(offset * (SHIP_SIZE.x / 2. - 10.0), 5.).extend(1.0),
-        //             ..default()
-        //         },
-        //         sprite: Sprite {
-        //             custom_size: Some(FERRIS_BULLET_FLASH_SIZE),
-        //             ..default()
-        //         },
-        //         texture: sprites.get("FERRIS_BULLET_FLASH".to_string()),
-        //         ..default()
-        //     })
-        //     .insert(DespawnTimer(Timer::from_seconds(FERRIS_BULLET_FLASH_DURATION_IN_SECONDS, false)))
-        //     .id();
-        
-        // commands.entity(ship).add_child(bullet_flash);
     }
 }
 
