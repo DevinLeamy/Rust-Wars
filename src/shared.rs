@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
-use crate::{player::{SHIP_BULLET_SIZE}, aliens::{ALIEN_BULLET_SPEED}};
+use crate::{aliens::{ALIEN_BULLET_SPEED, Rylo}, player::SHIP_BULLET_SIZE};
 
 pub const TIME_STEP: f32 = 1.0 / 60.0;
 pub const CAMERA_LEVEL: f32 = 1.0;
 
-// window 
+// window
 pub const WINDOW_WIDTH: f32 = 920.;
 pub const WINDOW_HEIGHT: f32 = 920.;
 
@@ -18,7 +18,7 @@ pub const LEFT_WALL: f32 = -WINDOW_WIDTH / 2.;
 pub const RIGHT_WALL: f32 = WINDOW_WIDTH / 2.;
 pub const WALL_THICKNESS: f32 = 10.;
 
-// bullet 
+// bullet
 pub const BULLET_SIZE: Vec2 = Vec2::new(20.0, 40.0);
 pub const SHIP_BULLET_SPEED: f32 = 350.0;
 pub const SHIP_BULLET_INITIAL_GAP: f32 = 5.;
@@ -40,11 +40,11 @@ pub const EXPLOSION_SIZE: f32 = 0.3;
 pub const EXPLOSION_FRAME_DURATION_IN_MILLIS: u64 = 20;
 
 /*
-So basically, we want to have a "transition" state between the action to launch the game and the start of the playing 
+So basically, we want to have a "transition" state between the action to launch the game and the start of the playing
 state are everything that's going to be active in the playing state goes to it's rightful place.
 
-The idea for implementing this is simple. When the play button is pressed, we transistion to a GameState::LoadWave which: spawns 
-the player, spawns the aliens and brings them into view, and then, once down, transition to the playing state where 
+The idea for implementing this is simple. When the play button is pressed, we transistion to a GameState::LoadWave which: spawns
+the player, spawns the aliens and brings them into view, and then, once down, transition to the playing state where
 the player can move and the aliens can shoot.
 
 With this setup, it means that after the player has cleared the current wave, we can spawn a new wave by transitioning into
@@ -59,7 +59,7 @@ pub struct Health(pub u32);
 
 #[derive(Component, Deref)]
 pub struct Collider {
-    pub size: Vec2
+    pub size: Vec2,
 }
 
 #[derive(Component, Deref, DerefMut)]
@@ -68,20 +68,20 @@ pub struct Velocity(pub Vec2);
 #[derive(Component, PartialEq)]
 pub enum Bullet {
     Ship,
-    Alien
+    Alien,
 }
 
 #[derive(Component, Deref, DerefMut)]
 pub struct ShootingCooldown(pub Timer);
 
 pub struct Sprites {
-    sprites: HashMap<String, Handle<Image>>
+    sprites: HashMap<String, Handle<Image>>,
 }
 
 impl Sprites {
     pub fn new() -> Self {
         Sprites {
-            sprites: HashMap::default()
+            sprites: HashMap::default(),
         }
     }
     pub fn add(&mut self, sprite_name: String, sprite: Handle<Image>) {
@@ -99,11 +99,11 @@ pub struct BulletBundle {
     sprite_bundle: SpriteBundle,
     bullet: Bullet,
     collider: Collider,
-    velocity: Velocity
+    velocity: Velocity,
 }
 
 impl BulletBundle {
-    pub fn from_alien(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
+    pub fn from_aris(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
         BulletBundle {
             sprite_bundle: SpriteBundle {
                 transform: Transform {
@@ -114,11 +114,32 @@ impl BulletBundle {
                 texture: sprite,
                 sprite: Sprite {
                     custom_size: Some(BULLET_SIZE),
-                    ..default() 
+                    ..default()
                 },
                 ..default()
             },
             velocity: Velocity(Vec2::new(0.0, -ALIEN_BULLET_SPEED)),
+            bullet: Bullet::Alien,
+            collider: Collider { size: BULLET_SIZE },
+        }
+    }
+
+    pub fn from_rylo(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
+        BulletBundle {
+            sprite_bundle: SpriteBundle {
+                transform: Transform {
+                    translation: translation.extend(BULLET_LAYER),
+                    scale: Vec3::splat(1.0),
+                    ..default()
+                },
+                texture: sprite,
+                sprite: Sprite {
+                    custom_size: Some(BULLET_SIZE),
+                    ..default()
+                },
+                ..default()
+            },
+            velocity: Velocity(Vec2::new(0.0, -Rylo::BULLET_SPEED)),
             bullet: Bullet::Alien,
             collider: Collider { size: BULLET_SIZE },
         }
@@ -141,7 +162,9 @@ impl BulletBundle {
             },
             velocity: Velocity(Vec2::new(0.0, SHIP_BULLET_SPEED)),
             bullet: Bullet::Ship,
-            collider: Collider { size: SHIP_BULLET_SIZE },
+            collider: Collider {
+                size: SHIP_BULLET_SIZE,
+            },
         }
     }
 }
@@ -155,7 +178,7 @@ pub struct BAnimation(pub benimator::Animation);
 #[derive(Clone)]
 pub enum ImageData {
     TextureAtlas(Handle<TextureAtlas>),
-    Images(Vec<String>)
+    Images(Vec<String>),
 }
 
 // TODO: use readonly public crate
@@ -166,30 +189,29 @@ pub struct Animation {
 }
 
 pub struct Animations {
-    animations: HashMap<String, Animation>
+    animations: HashMap<String, Animation>,
 }
 
 impl Animations {
     pub fn new() -> Self {
         Animations {
-            animations: HashMap::default()
+            animations: HashMap::default(),
         }
     }
     pub fn add(&mut self, animation_name: String, animation: Animation) {
         self.animations.insert(animation_name, animation);
     }
+
     pub fn get(&self, animation_name: String) -> Animation {
         self.animations.get(&animation_name).unwrap().clone()
     }
 }
 
-
 #[derive(Bundle)]
 pub struct WallBundle {
     #[bundle]
-    sprite_bundle: SpriteBundle
+    sprite_bundle: SpriteBundle,
 }
-
 
 pub enum WallLocation {
     Left,
@@ -210,12 +232,8 @@ impl WallLocation {
 
     fn size(&self) -> Vec2 {
         match self {
-            WallLocation::Left | WallLocation::Right => {
-                Vec2::new(WALL_THICKNESS, WINDOW_HEIGHT)
-            }
-            WallLocation::Bottom | WallLocation::Top => {
-                Vec2::new(WINDOW_WIDTH, WALL_THICKNESS)
-            }
+            WallLocation::Left | WallLocation::Right => Vec2::new(WALL_THICKNESS, WINDOW_HEIGHT),
+            WallLocation::Bottom | WallLocation::Top => Vec2::new(WINDOW_WIDTH, WALL_THICKNESS),
         }
     }
 }
@@ -234,7 +252,7 @@ impl WallBundle {
                     ..default()
                 },
                 ..default()
-            }
+            },
         }
     }
 }

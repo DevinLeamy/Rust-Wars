@@ -1,5 +1,5 @@
-use std::time::Duration;
 use benimator::FrameRate;
+use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy_tweening::TweeningPlugin;
@@ -9,7 +9,7 @@ mod player;
 use player::{PlayerPlugin, Ship};
 
 mod aliens;
-use aliens::{AliensPlugin, Alien};
+use aliens::{Alien, AliensPlugin};
 
 mod shared;
 use shared::*;
@@ -30,25 +30,26 @@ struct LoadWaveTimer(Timer);
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 enum GameState {
-    Menu,                // Game menu (press space to play)
-    Playing,             // Player and enemies can move and shoot
-    GameOver,            // Player is frozen and enemies have been despawned (press r to restart)
-    LoadWaveState,  // Load enemies into the scene (player and enemies cannot shoot)
+    Menu,          // Game menu (press space to play)
+    Playing,       // Player and enemies can move and shoot
+    GameOver,      // Player is frozen and enemies have been despawned (press r to restart)
+    LoadWaveState, // Load enemies into the scene (player and enemies cannot shoot)
 }
 
 #[derive(Component)]
 struct Background;
 
 #[derive(Component)]
-struct Scoreboard { score: u32, }
+struct Scoreboard {
+    score: u32,
+}
 
 #[derive(Component)]
 struct Explosion;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[derive(StageLabel)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, StageLabel)]
 pub enum TurboStages {
-    FixedUpdate
+    FixedUpdate,
 }
 
 pub struct Global {
@@ -94,17 +95,16 @@ fn main() {
         })
         .add_loopless_state(GameState::Menu)
         .add_plugins(DefaultPlugins)
-        // fixed update 
+        // fixed update
         .add_stage_before(
             CoreStage::Update,
             "Main Fixed TimeStep",
-            FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate)
+            FixedTimestepStage::from_stage(Duration::from_secs_f32(TIME_STEP), fixedupdate),
         )
         // resources
         .insert_resource(Animations::new())
         .insert_resource(Sprites::new())
         .insert_resource(Scoreboard { score: 0 })
-
         // plugins
         .add_plugin(TweeningPlugin)
         .add_plugin(DebugPlugin)
@@ -113,13 +113,13 @@ fn main() {
         .add_plugin(PlayerPlugin)
         .add_plugin(AliensPlugin)
         .add_plugin(AnimationPlugin::default())
-
         .add_startup_system(setup)
-        
         .add_exit_system(GameState::LoadWaveState, reset_scoreboard)
         .add_system(check_wave_end.run_in_state(GameState::Playing))
-        .add_enter_system(GameState::LoadWaveState, setup_load_wave.before(reset_scoreboard))
-
+        .add_enter_system(
+            GameState::LoadWaveState,
+            setup_load_wave.before(reset_scoreboard),
+        )
         .add_system(update_scoreboard)
         .add_system(update_explosions)
         .add_system(bevy::window::close_on_esc)
@@ -127,15 +127,15 @@ fn main() {
 }
 
 fn setup(
-    mut commands: Commands, 
+    mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
     mut animations: ResMut<Animations>,
-    mut sprites: ResMut<Sprites>
+    mut sprites: ResMut<Sprites>,
 ) {
     commands.insert_resource(Global {
         is_playing: false,
-        wave: None
+        wave: None,
     });
 
     commands.spawn_bundle(Camera2dBundle {
@@ -147,23 +147,21 @@ fn setup(
     });
 
     // background
-    commands
-        .spawn()
-        .insert_bundle(SpriteBundle {
-            transform: Transform {
-                translation: Vec3::new(0.0, 0.0, BACKGROUND_LEVEL),
-                ..default()
-            },
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT)),
-                ..default()
-            },
-            texture: asset_server.load("images/space.png"),
-            ..default() 
-        });
+    commands.spawn().insert_bundle(SpriteBundle {
+        transform: Transform {
+            translation: Vec3::new(0.0, 0.0, BACKGROUND_LEVEL),
+            ..default()
+        },
+        sprite: Sprite {
+            custom_size: Some(Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT)),
+            ..default()
+        },
+        texture: asset_server.load("images/space.png"),
+        ..default()
+    });
 
-     // spawn scoreboard
-     commands
+    // spawn scoreboard
+    commands
         .spawn()
         .insert_bundle(
             TextBundle::from_sections([
@@ -180,11 +178,11 @@ fn setup(
                     color: SCORE_COLOR,
                     font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 }),
-            ]) 
+            ])
             .with_style(Style {
                 position_type: PositionType::Absolute,
                 position: UiRect {
-                    top: SCOREBOARD_PADDING_TOP, 
+                    top: SCOREBOARD_PADDING_TOP,
                     left: SCOREBOARD_PADDING_LEFT,
                     ..default()
                 },
@@ -197,16 +195,14 @@ fn setup(
     commands
         .spawn()
         .insert_bundle(
-            TextBundle::from_sections([
-                TextSection::new(
-                    "{ RustConf 2173 }",
-                    TextStyle {
-                        font_size: BACKGROUND_FONT_SIZE,
-                        color: BACKGROUND_FONT_COLOR,
-                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    },
-                ),
-            ]) 
+            TextBundle::from_sections([TextSection::new(
+                "{ RustConf 2173 }",
+                TextStyle {
+                    font_size: BACKGROUND_FONT_SIZE,
+                    color: BACKGROUND_FONT_COLOR,
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                },
+            )])
             .with_text_alignment(TextAlignment::CENTER)
             .with_style(Style {
                 position_type: PositionType::Absolute,
@@ -220,7 +216,6 @@ fn setup(
         )
         .insert(Background);
 
-
     // animations
     let explosion_atlas = TextureAtlas::from_grid(
         asset_server.load("images/explosion_sheet.png"),
@@ -231,28 +226,51 @@ fn setup(
     let explosion_animation = Animation {
         animation: BAnimation(benimator::Animation::from_indices(
             0..25,
-            FrameRate::from_frame_duration(Duration::from_millis(EXPLOSION_FRAME_DURATION_IN_MILLIS)),
+            FrameRate::from_frame_duration(Duration::from_millis(
+                EXPLOSION_FRAME_DURATION_IN_MILLIS,
+            )),
         )),
-        image_data: ImageData::TextureAtlas(texture_atlases.add(explosion_atlas))
+        image_data: ImageData::TextureAtlas(texture_atlases.add(explosion_atlas)),
     };
 
     animations.add("EXPLOSION".to_string(), explosion_animation);
-    
+
     // spawn walls
-    commands.spawn().insert_bundle(WallBundle::new(WallLocation::Left));
-    commands.spawn().insert_bundle(WallBundle::new(WallLocation::Right));
-    commands.spawn().insert_bundle(WallBundle::new(WallLocation::Top));
-    commands.spawn().insert_bundle(WallBundle::new(WallLocation::Bottom));
+    commands
+        .spawn()
+        .insert_bundle(WallBundle::new(WallLocation::Left));
+    commands
+        .spawn()
+        .insert_bundle(WallBundle::new(WallLocation::Right));
+    commands
+        .spawn()
+        .insert_bundle(WallBundle::new(WallLocation::Top));
+    commands
+        .spawn()
+        .insert_bundle(WallBundle::new(WallLocation::Bottom));
 
     // bullets
-    sprites.add("FERRIS_BULLET".to_string(), asset_server.load("images/rust_white.png"))
+    sprites.add(
+        "FERRIS_BULLET".to_string(),
+        asset_server.load("images/rust_white.png"),
+    )
 }
 
 fn update_explosions(
-    mut query: Query<(Entity, &mut AnimationState, &mut TextureAtlasSprite, &BAnimation), With<Explosion>>,
-    mut commands: Commands
+    mut query: Query<
+        (
+            Entity,
+            &mut AnimationState,
+            &mut TextureAtlasSprite,
+            &BAnimation,
+        ),
+        With<Explosion>,
+    >,
+    mut commands: Commands,
 ) {
-    for (explosion_entity, mut animation_state, mut texture_atlas, explosion_animation) in query.iter_mut() {
+    for (explosion_entity, mut animation_state, mut texture_atlas, explosion_animation) in
+        query.iter_mut()
+    {
         if animation_state.frame_index() == 24 {
             // TODO: .is_ended() _should_ work?!
             // if animation_state.is_ended() {
@@ -273,7 +291,7 @@ fn reset_scoreboard(mut scoreboard: ResMut<Scoreboard>, global: Res<Global>) {
 fn check_gameover(
     ship_query: Query<&Health, With<Ship>>,
     game_state: Res<CurrentState<GameState>>,
-    mut commands: Commands
+    mut commands: Commands,
 ) {
     if game_state.as_ref() == &CurrentState(GameState::GameOver) {
         return;
@@ -286,7 +304,11 @@ fn check_gameover(
     }
 }
 
-fn check_wave_end(alien_query: Query<With<Alien>>, mut commands: Commands, mut global: ResMut<Global>) {
+fn check_wave_end(
+    alien_query: Query<With<Alien>>,
+    mut commands: Commands,
+    mut global: ResMut<Global>,
+) {
     if alien_query.is_empty() {
         global.wave_cleared();
         commands.insert_resource(NextState(GameState::LoadWaveState));
@@ -315,11 +337,12 @@ fn update_timed(mut commands: Commands, mut query: Query<(Entity, &mut DespawnTi
     }
 }
 
-fn setup_load_wave(mut commands: Commands, mut global: ResMut<Global>) {
+fn setup_load_wave(mut commands: Commands, global: ResMut<Global>) {
     println!("Loading Wave: {}", global.current_wave());
-    commands.insert_resource(LoadWaveTimer(
-        Timer::from_seconds(LOAD_WAVE_DURATION_IN_SECONDS, false)
-    ));
+    commands.insert_resource(LoadWaveTimer(Timer::from_seconds(
+        LOAD_WAVE_DURATION_IN_SECONDS + 3.0,
+        false,
+    )));
 }
 
 fn update_load_wave(mut commands: Commands, mut timer: ResMut<LoadWaveTimer>) {
