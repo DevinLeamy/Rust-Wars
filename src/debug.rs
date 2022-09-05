@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
+use iyes_loopless::state::NextState;
 
-use crate::shared::{Collider, Health};
+use crate::{shared::{Collider, Health}, aliens::Alien, GameState, Global};
 
 pub struct DebugPlugin;
 
@@ -11,7 +12,8 @@ impl Plugin for DebugPlugin {
         println!("Debugging enabled");
         app.add_plugin(WorldInspectorPlugin::new())
             .add_system(draw_bounding_boxes)
-            .add_system(debug_ship);
+            .add_system(debug_ship)
+            .add_system(goto_next_wave);
     }
     #[cfg(not(feature = "debug"))]
     fn build(&self, app: &mut App) {}
@@ -42,5 +44,22 @@ fn draw_bounding_boxes(mut commands: Commands, query: Query<(Entity, &Collider),
             .id();
 
         commands.entity(entity).add_child(bounding_box);
+    }
+}
+
+fn goto_next_wave(
+    keyboard_input: Res<Input<KeyCode>>, 
+    mut commands: Commands, 
+    query: Query<Entity, With<Alien>>,
+    mut global: ResMut<Global>
+) {
+    if keyboard_input.just_pressed(KeyCode::N) {
+        for alien in query.iter() {
+            commands.entity(alien).despawn_recursive();
+        }
+
+        global.wave_cleared();
+
+        commands.insert_resource(NextState(GameState::LoadWaveState));
     }
 }

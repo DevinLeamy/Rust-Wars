@@ -1,6 +1,6 @@
 use benimator::FrameRate;
 use bevy_tweening::{lens::TransformPositionLens, *};
-use rand::*;
+use rand::random;
 use std::time::Duration;
 
 use bevy::{prelude::*, sprite::collide_aabb::collide};
@@ -22,6 +22,20 @@ pub const BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.1;
 #[derive(Component)]
 pub struct Alien;
 
+impl Alien {
+    pub fn position_tween(start: Vec2, end: Vec2, duration: DurationType) -> Tween<Transform> {
+        Tween::new(
+            EaseFunction::QuadraticInOut,
+            TweeningType::Once,
+            duration.sample(),
+            TransformPositionLens {
+                start: start.extend(0.0), 
+                end: end.extend(0.0) 
+            },
+        ) 
+    }
+}
+
 #[derive(Component)]
 pub struct Aris;
 
@@ -42,11 +56,16 @@ impl Rylo {
     const DESTROY_ALIEN_SCORE: u32 = 10;
     const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.0;
     const POSITION_TWEEN_COMPLETE: u64 = 1;
+    const POSITION_DELAY_COMPLETE: u64 = 2;
     const POSITION_TWEEN_DELAY: f32 = 10.0;
     const POSITION_TWEEN_DURATION: f32 = 10.0;
 }
 
 impl Rylo {
+    fn position_tween(start: Vec2, end: Vec2, completion_id: u64, duration: DurationType) -> Tween<Transform> {
+        Alien::position_tween(start, end, duration).with_completed_event(completion_id)
+    }
+
     fn update(
         mut query: Query<(Entity, &mut Transform, &mut ShootingCooldown), With<Rylo>>,
         mut commands: Commands,
@@ -86,7 +105,6 @@ impl Rylo {
 
                 cooldown.reset();
             } 
- 
         }
    }
 
@@ -95,51 +113,40 @@ impl Rylo {
             let entity = event.entity;
             let tween_id = event.user_data;
 
-            if tween_id != Rylo::POSITION_TWEEN_COMPLETE {
+            if tween_id != Rylo::POSITION_TWEEN_COMPLETE && tween_id != Rylo::POSITION_DELAY_COMPLETE {
                 continue;
             }
 
+            let tween;
+
             let alien_transform = query.get(entity).expect("rylo not found");
+            let translation = alien_transform.translation.truncate();
 
-            let ending_x = LEFT_WALL + (random::<f32>() * WINDOW_WIDTH);
-            let ending_y = BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT / 2.0);
+            if tween_id == Rylo::POSITION_TWEEN_COMPLETE {
+                tween = Rylo::position_tween(
+                    translation, 
+                    translation, 
+                    Rylo::POSITION_DELAY_COMPLETE,
+                    DurationType::Between(Between(1., Rylo::POSITION_TWEEN_DELAY))
+                ); 
+            } else if tween_id == Rylo::POSITION_DELAY_COMPLETE {
 
-            let position_tween = Rylo::get_position_tween(
-                alien_transform.translation.truncate(), 
-                Vec2::new(ending_x, ending_y), 
-                random::<f32>() * Rylo::POSITION_TWEEN_DURATION); 
+                let ending_x = LEFT_WALL + (random::<f32>() * WINDOW_WIDTH);
+                let ending_y = BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT / 2.0);
 
-            // let deplayed_tween = position_tween.then(
-            //     Delay::new(Duration::from_secs_f32(random::<f32>() * Rylo::POSITION_TWEEN_DELAY))
-            // );
+                tween = Rylo::position_tween(
+                    alien_transform.translation.truncate(), 
+                    Vec2::new(ending_x, ending_y),
+                    Rylo::POSITION_TWEEN_COMPLETE,
+                    DurationType::Between(Between(1., Rylo::POSITION_TWEEN_DURATION)) 
+                );
+            } else {
+                panic!("Never reached");
+            }
 
-            commands.entity(entity).insert(Animator::new(position_tween));
+            commands.entity(entity).insert(Animator::new(tween));
         }         
     }
-
-    fn get_position_tween(start: Vec2, end: Vec2, duration: f32) -> Tween<Transform> {
-        if random::<f32>() > 0.4 {
-            Tween::new(
-                EaseFunction::QuadraticInOut,
-                TweeningType::Once,
-                Duration::from_secs_f32(f32::max(duration, duration * f32::min(1.0, random::<f32>() + 0.25))),
-                TransformPositionLens {
-                    start: start.extend(0.0), 
-                    end: end.extend(0.0) 
-                },
-            ).with_completed_event(Rylo::POSITION_TWEEN_COMPLETE)
-        } else {
-            Tween::new(
-                EaseFunction::QuadraticInOut,
-                TweeningType::Once,
-                Duration::from_secs_f32(f32::max(duration, duration * f32::min(1.0, random::<f32>() + 0.25))),
-                TransformPositionLens {
-                    start: start.extend(0.0), 
-                    end: start.extend(0.0) 
-                },
-            ).with_completed_event(Rylo::POSITION_TWEEN_COMPLETE) 
-        }
-   }
 }
 
 pub struct AliensPlugin;
@@ -329,10 +336,11 @@ fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sp
             let starting_y = BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT);
 
             if random::<f32>() > 0.8 {
-                let position_tween = Rylo::get_position_tween(
+                let position_tween = Rylo::position_tween(
                     Vec2::new(starting_x, starting_y), 
                     Vec2::new(alien_x, alien_y), 
-                    LOAD_WAVE_DURATION_IN_SECONDS + 4.0
+                    Rylo::POSITION_TWEEN_COMPLETE,
+                    DurationType::Fixed(Fixed(LOAD_WAVE_DURATION_IN_SECONDS + 2.))
                 ); 
 
                 commands
@@ -341,19 +349,14 @@ fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sp
                         Vec2::new(alien_x, alien_y),
                         sprites.get("RYLO_ALIEN"),
                     ))
-                    .insert(Animator::new(position_tween))
-                    .insert(AnimationState::default());
+                    .insert(Animator::new(position_tween));
             } else {
-                let position_tween = Tween::new(
-                    EaseFunction::QuadraticInOut,
-                    TweeningType::Once,
-                    duration_between(0.25, LOAD_WAVE_DURATION_IN_SECONDS),
-                    TransformPositionLens {
-                        start: Vec3::new(starting_x, starting_y, 0.0),
-                        end: Vec3::new(alien_x, alien_y, 0.0),
-                    },
-                );
-    
+                let position_tween = Alien::position_tween(
+                    Vec2::new(starting_x, starting_y),
+                    Vec2::new(alien_x, alien_y),
+                    DurationType::Between(Between(1., LOAD_WAVE_DURATION_IN_SECONDS))
+                );    
+
                 commands
                 .spawn()
                 .insert_bundle(AlienBundle::new_aris(
@@ -364,7 +367,6 @@ fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sp
                 .insert_bundle(AnimationBundle::from_animation(animations.get("ALIEN_WALK")))
                 .insert(Animator::new(position_tween));
             }
-
         }
     }
 }
@@ -376,8 +378,8 @@ fn spawn_aliens(
     global: Res<Global>,
 ) {
     match global.current_wave() {
-        0 => wave_zero(commands, animations, sprites),
-        // 0 => wave_one(commands, animations, sprites),
+        // 0 => wave_zero(commands, animations, sprites),
+        0 => wave_one(commands, animations, sprites),
         1 => wave_one(commands, animations, sprites),
         _ => panic!("Wave not implemented"),
     }
@@ -460,15 +462,15 @@ fn check_for_alien_collisions(
     for (alien_entity, transform, alien_collider, maybe_rylo, maybe_aris) in &alien_query {
         for (bullet_entity, bullet, bullet_transform, bullet_collider) in &bullet_query {
             if bullet == &Bullet::Alien {
-                // ignore bullets from other aliens
                 continue;
             }
-            if let Some(_collision) = collide(
+
+            if collide(
                 transform.translation,
                 alien_collider.size,
                 bullet_transform.translation,
                 bullet_collider.size,
-            ) {
+            ).is_some() {
                 commands.entity(bullet_entity).despawn_recursive();
                 commands.entity(alien_entity).despawn_recursive();
 
@@ -489,15 +491,12 @@ fn check_for_alien_collisions(
                         },
                         ..default()
                     })
-                    .insert(explosion.animation.clone())
-                    .insert(AnimationState::default())
+                    .insert_bundle(AnimationBundle::from_animation(explosion))
                     .insert(Explosion);
 
-                if maybe_rylo.is_some() {
-                    scoreboard.score += Rylo::DESTROY_ALIEN_SCORE;
-                } else if maybe_aris.is_some() {
-                    scoreboard.score += DESTROY_ALIEN_SCORE;
-                }
+                if maybe_rylo.is_some() { scoreboard.score += Rylo::DESTROY_ALIEN_SCORE; } 
+                else if maybe_aris.is_some() { scoreboard.score += DESTROY_ALIEN_SCORE; }
+
                 break;
             }
         }

@@ -275,11 +275,7 @@ fn reset_scoreboard(mut scoreboard: ResMut<Scoreboard>, global: Res<Global>) {
     }
 }
 
-fn check_gameover(
-    ship_query: Query<&Health, With<Ship>>,
-    game_state: Res<CurrentState<GameState>>,
-    mut commands: Commands,
-) {
+fn check_gameover(ship_query: Query<&Health, With<Ship>>, game_state: Res<CurrentState<GameState>>, mut commands: Commands) {
     if game_state.as_ref() == &CurrentState(GameState::GameOver) {
         return;
     }
@@ -291,11 +287,7 @@ fn check_gameover(
     }
 }
 
-fn check_wave_end(
-    alien_query: Query<With<Alien>>,
-    mut commands: Commands,
-    mut global: ResMut<Global>,
-) {
+fn check_wave_end(alien_query: Query<With<Alien>>, mut commands: Commands, mut global: ResMut<Global>) {
     if alien_query.is_empty() {
         global.wave_cleared();
         commands.insert_resource(NextState(GameState::LoadWaveState));

@@ -67,7 +67,7 @@ pub enum Bullet {
     Alien,
 }
 
-trait DurationGenerator {
+pub trait DurationGenerator {
     fn sample(&self) -> Duration; 
 }
 
