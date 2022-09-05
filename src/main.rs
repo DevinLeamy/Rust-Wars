@@ -57,6 +57,11 @@ pub struct Global {
 }
 
 impl Global {
+    pub fn reset(&mut self) {
+        self.is_playing = false;
+        self.wave = Some(0);
+    }
+
     pub fn current_wave(&self) -> u32 {
         self.wave.unwrap()
     }
@@ -133,8 +138,6 @@ fn load_assets_and_animations(
     mut animations: ResMut<Animations>,
     mut sprites: ResMut<Sprites>,
 ) {
-    sprites.add("FERRIS_BULLET", asset_server.load("images/ferris_bullet.png"));
-    sprites.add("FERRIS_BULLET_FLASH", asset_server.load("images/ferris_bullet_flash.png"));
     sprites.add("SPACE_BACKGROUND", asset_server.load("images/space.png"));
 
     let explosion_atlas = TextureAtlas::from_grid(

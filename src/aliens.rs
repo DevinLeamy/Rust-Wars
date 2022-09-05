@@ -44,7 +44,7 @@ impl Aris {
     pub const BULLET_SPEED: f32 = 300.0;
     pub const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 10.;
     pub const INITIAL_DIRECTION: f32 = 1.; // right
-    pub const LAYER: f32 = 0.1;
+    pub const LAYER: f32 = 0.5;
 }
 
 #[derive(Component)]
@@ -54,7 +54,7 @@ impl Zorg {
     pub const SIZE: Vec2 = Vec2::new(70.0, 60.);
     pub const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.0;
     pub const SCORE_VALUE: u32 = 20;
-    pub const LAYER: f32 = 0.2;
+    pub const LAYER: f32 = 0.0;
     pub const BULLET_SIZE: Vec2 = Vec2::new(30.0, 60.0);
     pub const BULLET_SPEED: f32 = 150.0;
 }
@@ -390,6 +390,7 @@ fn spawn_aliens(
         0 => Wave::load_from_file("assets/waves/wave_0.txt").initialize(commands, sprites, animations),
         1 => Wave::load_from_file("assets/waves/wave_1.txt").initialize(commands, sprites, animations),
         2 => Wave::load_from_file("assets/waves/wave_2.txt").initialize(commands, sprites, animations),
+        3 => Wave::load_from_file("assets/waves/wave_3.txt").initialize(commands, sprites, animations),
         _ => panic!("Wave not implemented"),
     }
 }

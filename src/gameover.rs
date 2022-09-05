@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use iyes_loopless::prelude::*;
 
-use crate::{aliens::Alien, player::Ship, shared::Bullet, GameState};
+use crate::{aliens::Alien, player::Ship, shared::Bullet, GameState, Global, Scoreboard};
 
 #[derive(Component)]
 struct GameOverMenu;
@@ -39,7 +39,7 @@ fn create_gameover_screen(
                 },
             ),
             TextSection::new(
-                "[R] To Retry\n[ESC] To Quit",
+                "[R] Retry\n[M] Menu\n[ESC] Quit",
                 TextStyle {
                     font_size: 30.0,
                     color: Color::rgb(1.0, 1.0, 1.0),
@@ -63,8 +63,11 @@ fn create_gameover_screen(
 
 fn update_gameover_menu(mut commands: Commands, keyboard_input: Res<Input<KeyCode>>) {
     let restart = keyboard_input.pressed(KeyCode::R);
+    let menu = keyboard_input.pressed(KeyCode::M);
 
-    if restart {
+    if menu {
+        commands.insert_resource(NextState(GameState::Menu));
+    } else if restart {
         commands.insert_resource(NextState(GameState::LoadWaveState));
     }
 }
@@ -74,12 +77,21 @@ fn despawn_entities(
     ship_query: Query<Entity, With<Ship>>,
     bullet_query: Query<Entity, With<Bullet>>,
     menu_query: Query<Entity, With<GameOverMenu>>,
+    scoreboard_query: Query<Entity, With<Scoreboard>>,
+    mut global: ResMut<Global>
 ) {
+    global.reset();
+
     let ship = ship_query.single();
-    commands.entity(ship).despawn();
+    commands.entity(ship).despawn_recursive();
 
     for bullet in bullet_query.iter() {
         commands.entity(bullet).despawn();
+    }
+
+    commands.remove_resource::<Scoreboard>();
+    for scoreboard in scoreboard_query.iter() {
+        commands.entity(scoreboard).despawn();
     }
 
     let gameover_menu = menu_query.single();

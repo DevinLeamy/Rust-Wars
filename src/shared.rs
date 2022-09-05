@@ -117,6 +117,15 @@ pub struct ShootingCooldown {
 }
 
 impl ShootingCooldown {
+    /*
+      Starts finished and then is reset to the desired time 
+    */
+    pub fn new_finished(duration: DurationType) -> Self {
+        ShootingCooldown {
+            timer: Timer::new(Duration::ZERO, false),
+            duration 
+        } 
+    }
     pub fn new(duration: DurationType) -> Self {
         ShootingCooldown {
             timer: Timer::new(duration.sample(), false),

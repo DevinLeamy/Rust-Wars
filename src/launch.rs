@@ -31,7 +31,7 @@ impl Menu {
                     TextSection::new(
                         "Rust Wars\n",
                         TextStyle {
-                            font_size: 70.0,
+                            font_size: 110.0,
                             color: Color::rgb(1.0, 1.0, 1.0),
                             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                         },
@@ -40,12 +40,12 @@ impl Menu {
                         "Chapter II: The Borrow Checker's Return\n\n\n",
                         TextStyle {
                             font_size: 30.0,
-                            color: Color::rgb(0.8, 0.8, 0.8),
+                            color: Color::rgb(0.7, 0.7, 0.7),
                             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                         },
                     ),
                     TextSection::new(
-                        "Press [space] to play",
+                        "→ Press [space] to play ←",
                         TextStyle {
                             font_size: 40.0,
                             color: Color::rgb(1.0, 1.0, 1.0),
@@ -65,7 +65,65 @@ impl Menu {
                     ..default()
                 }),
             );
+        commands
+            .spawn()
+            .insert(Menu)
+            .insert(Name::new("Menu Ferris"))
+            .insert_bundle(SpriteBundle {
+                transform: Transform {
+                    translation: Vec3::new(-186.0, -290.0, 0.0),
+                    scale: Vec3::new(1.3, 1.3, 1.0),
+                    rotation: Quat::from_rotation_z(-0.2),
+                    ..default()
+                },
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(300.0, 200.0)),
+                    ..default()
+                },
+                texture: asset_server.load("images/ferris.png"),
+                ..default()
+            });
+
+        commands
+            .spawn()
+            .insert(Menu)
+            .insert(Name::new("Menu Alien Ferris"))
+            .insert_bundle(SpriteBundle {
+                transform: Transform {
+                    translation: Vec3::new(188.0, 270.0, 0.0),
+                    scale: Vec3::new(1.0, 1.0, 1.0),
+                    rotation: Quat::from_rotation_z(0.0f32.to_radians()),
+                    ..default()
+                },
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(300.0, 200.0)),
+                    ..default()
+                },
+                texture: asset_server.load("images/alien_ferris.png"),
+                ..default()
+            });
+
+        commands
+            .spawn()
+            .insert(Menu)
+            .insert(Name::new("Menu Unsafe Ferris"))
+            .insert_bundle(SpriteBundle {
+                transform: Transform {
+                    translation: Vec3::new(-304.0, 294.0, 0.0),
+                    scale: Vec3::new(0.7, 0.7, 1.0),
+                    rotation: Quat::from_rotation_z(0.2),
+                    ..default()
+                },
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(150.0, 150.0)),
+                    ..default()
+                },
+                texture: asset_server.load("images/unsafe_ferris_2.png"),
+                ..default()
+            });
     } 
+
+    
 
     fn update(
         mut commands: Commands,
@@ -84,8 +142,9 @@ impl Menu {
         mut commands: Commands,
         query: Query<Entity, With<Menu>>
     ) {
-        let menu = query.single();
-        commands.entity(menu).despawn();
+        for menu_entity in query.iter() {
+            commands.entity(menu_entity).despawn();
+        }
     }
 }
 
