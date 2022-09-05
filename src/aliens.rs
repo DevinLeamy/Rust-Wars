@@ -266,111 +266,6 @@ impl AlienBundle {
     }
 }
 
-fn wave_zero(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
-    let first_alien_x = LEFT_WALL + ALIEN_WALL_GAP.x + Aris::SIZE.x / 2.;
-    let first_alien_y = TOP_WALL - ALIEN_WALL_GAP.y - Aris::SIZE.y / 2. - 80.;
-
-    let total_alien_width = Aris::SIZE.x + ALIEN_ALIEN_GAP.x;
-    let total_alien_height = Aris::SIZE.y + ALIEN_ALIEN_GAP.y;
-
-    // spawn aliens
-    for row in 0..5 {
-        if row == 2 {
-            continue;
-        }
-        for col in 0..(9 + row % 2) {
-            if (row == 1 || row == 3) && col % 3 == 0 {
-                continue;
-            }
-            let alien_x = first_alien_x + col as f32 * total_alien_width
-                - ALIEN_ODD_ROW_OFFSET * ((row % 2) as f32);
-            let alien_y = first_alien_y - row as f32 * total_alien_height;
-
-            let starting_x = LEFT_WALL + (random::<f32>() * WINDOW_WIDTH);
-            let starting_y = BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT);
-
-            let position_tween = Tween::new(
-                EaseFunction::QuadraticInOut,
-                TweeningType::Once,
-                Duration::from_secs_f32(LOAD_WAVE_DURATION_IN_SECONDS * f32::min(1.0, random::<f32>() + 0.25)),
-                TransformPositionLens {
-                    start: Vec3::new(starting_x, starting_y, 0.0),
-                    end: Vec3::new(alien_x, alien_y, 0.0),
-                },
-            );
-
-            commands
-                .spawn()
-                .insert_bundle(AlienBundle::new_aris(
-                    Vec2::new(starting_x, starting_y),
-                    Vec2::new(Aris::SPEED * Aris::INITIAL_DIRECTION, 0.0),
-                    sprites.get("ALIEN_WALK_1") 
-                ))
-                .insert_bundle(AnimationBundle::from_animation(animations.get("ALIEN_WALK")))
-                .insert(Animator::new(position_tween));
-        }
-    }
-}
-
-fn wave_one(mut commands: Commands, animations: Res<Animations>, sprites: Res<Sprites>) {
-    let first_alien_x = LEFT_WALL + ALIEN_WALL_GAP.x + Aris::SIZE.x / 2.;
-    let first_alien_y = TOP_WALL - ALIEN_WALL_GAP.y - Aris::SIZE.y / 2. - 80.;
-
-    let total_alien_width = Aris::SIZE.x + ALIEN_ALIEN_GAP.x;
-    let total_alien_height = Aris::SIZE.y + ALIEN_ALIEN_GAP.y;
-
-    // spawn aliens
-    for row in 0..5 {
-        if row == 2 {
-            continue;
-        }
-        for col in 0..(9 + row % 2) {
-            if (row == 0 || row == 4) && col % 3 == 0 {
-                continue;
-            }
-            let alien_x = first_alien_x + col as f32 * total_alien_width
-                - ALIEN_ODD_ROW_OFFSET * ((row % 2) as f32);
-            let alien_y = first_alien_y - row as f32 * total_alien_height;
-
-            let starting_x = LEFT_WALL + (random::<f32>() * WINDOW_WIDTH);
-            let starting_y = BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT);
-
-            if random::<f32>() > 0.8 {
-                let position_tween = Rylo::position_tween(
-                    Vec2::new(starting_x, starting_y), 
-                    Vec2::new(alien_x, alien_y), 
-                    Rylo::POSITION_TWEEN_COMPLETE,
-                    DurationType::Fixed(Fixed(LOAD_WAVE_DURATION_IN_SECONDS + 2.))
-                ); 
-
-                commands
-                    .spawn()
-                    .insert_bundle(AlienBundle::new_rylo(
-                        Vec2::new(alien_x, alien_y),
-                        sprites.get("RYLO_ALIEN"),
-                    ))
-                    .insert(Animator::new(position_tween));
-            } else {
-                let position_tween = Alien::position_tween(
-                    Vec2::new(starting_x, starting_y),
-                    Vec2::new(alien_x, alien_y),
-                    DurationType::Between(Between(1., LOAD_WAVE_DURATION_IN_SECONDS))
-                );    
-
-                commands
-                .spawn()
-                .insert_bundle(AlienBundle::new_aris(
-                    Vec2::new(starting_x, starting_y),
-                    Vec2::new(Aris::SPEED * Aris::INITIAL_DIRECTION, 0.0),
-                    sprites.get("ALIEN_WALK_1") 
-                ))
-                .insert_bundle(AnimationBundle::from_animation(animations.get("ALIEN_WALK")))
-                .insert(Animator::new(position_tween));
-            }
-        }
-    }
-}
-
 fn spawn_aliens(
     commands: Commands,
     animations: Res<Animations>,
@@ -378,9 +273,8 @@ fn spawn_aliens(
     global: Res<Global>,
 ) {
     match global.current_wave() {
-        // 0 => wave_zero(commands, animations, sprites),
-        0 => wave_one(commands, animations, sprites),
-        1 => wave_one(commands, animations, sprites),
+        0 => Wave::load_from_file("assets/waves/wave_0.txt").initialize(commands, sprites, animations),
+        1 => Wave::load_from_file("assets/waves/wave_1.txt").initialize(commands, sprites, animations),
         _ => panic!("Wave not implemented"),
     }
 }
@@ -517,5 +411,106 @@ fn update_alien_animations(
     for (mut animation_state, alien_animation, mut texture) in query.iter_mut() {
         animation_state.update(alien_animation, Duration::from_secs_f32(TIME_STEP));
         *texture = sprites.get(images[animation_state.frame_index() as usize].as_str())
+    }
+}
+
+pub struct Wave {
+    layout: Vec<Vec<char>>
+}
+
+impl Wave {
+    pub fn load_from_file(path: &str) -> Wave {
+        let wave_data = std::fs::read_to_string(path).expect("Wave file not found!");
+        let lines: Vec<&str> = wave_data.split_whitespace().collect();
+        
+        let mut layout = vec![vec![' '; lines[0].len()]; lines.len()];
+
+        for (i, line) in lines.iter().enumerate() {
+            let line: Vec<char> = line.as_bytes().iter().map(|c| c.to_ascii_lowercase() as char).collect();
+            for j in 0..line.len() as usize {
+                layout[i][j] = line[j];
+            }
+        }
+
+        Wave { layout }
+    }
+
+    pub fn initialize(&self, mut commands: Commands, sprites: Res<Sprites>, animations: Res<Animations>) {
+        for row in 0..self.layout.len() {
+            for col in 0..self.layout[0].len() {
+                let alien_type = self.layout[row][col];
+
+                match alien_type {
+                    '#' => continue,
+                    'a' => Wave::initialize_aris(&sprites, &animations, &mut commands, row as u32, col as u32),
+                    'r' => Wave::initialize_rylo(&sprites, &mut commands, row as u32, col as u32), 
+                    _   => panic!("INVALID WAVE LAYOUT") 
+                }
+            }
+        }
+    }
+
+    pub fn get_translation(row: u32, col: u32) -> Vec2 {
+        let first_alien_x = LEFT_WALL + ALIEN_WALL_GAP.x + Aris::SIZE.x / 2.;
+        let first_alien_y = TOP_WALL - ALIEN_WALL_GAP.y - Aris::SIZE.y / 2. - 80.;
+    
+        let total_alien_width = Aris::SIZE.x + ALIEN_ALIEN_GAP.x;
+        let total_alien_height = Aris::SIZE.y + ALIEN_ALIEN_GAP.y;
+
+        let alien_x = first_alien_x + col as f32 * total_alien_width - ALIEN_ODD_ROW_OFFSET * ((row % 2) as f32);
+        let alien_y = first_alien_y - row as f32 * total_alien_height;
+
+        Vec2::new(alien_x, alien_y)
+    }
+
+    fn initialize_aris(sprites: &Res<Sprites>, animations: &Res<Animations>, commands: &mut Commands, row: u32, col: u32) {
+        let starting_translation = Vec2::new(
+            LEFT_WALL + (random::<f32>() * WINDOW_WIDTH),
+            BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT)
+        );
+        let ending_translation = Wave::get_translation(row, col);
+
+        let position_tween = Tween::new(
+            EaseFunction::QuadraticInOut,
+            TweeningType::Once,
+            Duration::from_secs_f32(LOAD_WAVE_DURATION_IN_SECONDS * f32::min(1.0, random::<f32>() + 0.25)),
+            TransformPositionLens {
+                start: starting_translation.extend(0.0),
+                end: ending_translation.extend(0.0),
+            },
+        );
+
+        commands
+            .spawn()
+            .insert_bundle(AlienBundle::new_aris(
+                starting_translation,
+                Vec2::new(Aris::SPEED * Aris::INITIAL_DIRECTION, 0.0),
+                sprites.get("ALIEN_WALK_1") 
+            ))
+            .insert_bundle(AnimationBundle::from_animation(animations.get("ALIEN_WALK")))
+            .insert(Animator::new(position_tween));
+    }
+
+    fn initialize_rylo(sprites: &Res<Sprites>, commands: &mut Commands, row: u32, col: u32) {
+        let starting_translation = Vec2::new(
+            LEFT_WALL + (random::<f32>() * WINDOW_WIDTH),
+            BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT)
+        );
+        let ending_translation = Wave::get_translation(row, col);
+
+        let position_tween = Rylo::position_tween(
+            starting_translation,
+            ending_translation,
+            Rylo::POSITION_TWEEN_COMPLETE,
+            DurationType::Fixed(Fixed(LOAD_WAVE_DURATION_IN_SECONDS + 2.))
+        ); 
+
+        commands
+            .spawn()
+            .insert_bundle(AlienBundle::new_rylo(
+                starting_translation,
+                sprites.get("RYLO_ALIEN"),
+            ))
+            .insert(Animator::new(position_tween));
     }
 }

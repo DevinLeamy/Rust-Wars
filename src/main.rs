@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{time::Duration, path::Path};
 
 use bevy::prelude::*;
 use bevy_tweening::TweeningPlugin;
@@ -8,7 +8,7 @@ mod player;
 use player::{PlayerPlugin, Ship};
 
 mod aliens;
-use aliens::{Alien, AliensPlugin};
+use aliens::{Alien, AliensPlugin, Wave};
 
 mod shared;
 use shared::*;
@@ -77,6 +77,7 @@ impl Global {
 }
 
 fn main() {
+    let _wave = Wave::load_from_file("assets/waves/wave_1.txt");
     let mut fixedupdate = SystemStage::parallel();
     fixedupdate.add_system(update_bullets.run_in_state(GameState::Playing));
     fixedupdate.add_system(check_gameover.run_in_state(GameState::Playing));
