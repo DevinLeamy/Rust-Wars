@@ -1,7 +1,9 @@
+use benimator::FrameRate;
 use bevy::prelude::*;
-use std::collections::HashMap;
+use rand::random;
+use std::{collections::HashMap, time::Duration};
 
-use crate::{aliens::{ALIEN_BULLET_SPEED, Rylo}, player::SHIP_BULLET_SIZE};
+use crate::{aliens::{Rylo, Aris}, player::SHIP_BULLET_SIZE};
 
 pub const TIME_STEP: f32 = 1.0 / 60.0;
 pub const CAMERA_LEVEL: f32 = 1.0;
@@ -39,20 +41,14 @@ pub const SCOREBOARD_PADDING_LEFT: Val = Val::Px(10.0);
 pub const EXPLOSION_SIZE: f32 = 0.3;
 pub const EXPLOSION_FRAME_DURATION_IN_MILLIS: u64 = 20;
 
-/*
-So basically, we want to have a "transition" state between the action to launch the game and the start of the playing
-state are everything that's going to be active in the playing state goes to it's rightful place.
-
-The idea for implementing this is simple. When the play button is pressed, we transistion to a GameState::LoadWave which: spawns
-the player, spawns the aliens and brings them into view, and then, once down, transition to the playing state where
-the player can move and the aliens can shoot.
-
-With this setup, it means that after the player has cleared the current wave, we can spawn a new wave by transitioning into
-the GameState::LoadWave state. Nice and easy.
-*/
-
 #[derive(Component, Deref, DerefMut)]
 pub struct DespawnTimer(pub Timer);
+
+impl DespawnTimer {
+    pub fn from_seconds(duration: f32) -> DespawnTimer {
+        DespawnTimer(Timer::from_seconds(duration, false))
+    }
+}
 
 #[derive(Component, Debug, PartialEq, Eq)]
 pub struct Health(pub u32);
@@ -71,8 +67,76 @@ pub enum Bullet {
     Alien,
 }
 
-#[derive(Component, Deref, DerefMut)]
-pub struct ShootingCooldown(pub Timer);
+trait DurationGenerator {
+    fn sample(&self) -> Duration; 
+}
+
+pub struct AtMost(pub f32);
+
+impl DurationGenerator for AtMost {
+    fn sample(&self) -> Duration {
+        duration_at_most(self.0)
+    }
+}
+pub struct Between(pub f32, pub f32); 
+
+impl DurationGenerator for Between {
+    fn sample(&self) -> Duration {
+        duration_between(self.0, self.1)
+    }
+}
+
+pub struct Fixed(pub f32);
+
+impl DurationGenerator for Fixed {
+    fn sample(&self) -> Duration {
+        Duration::from_secs_f32(self.0)
+    }
+}
+
+pub enum DurationType {
+    AtMost(AtMost),
+    Between(Between),
+    Fixed(Fixed)
+}
+
+impl DurationGenerator for DurationType {
+    fn sample(&self) -> Duration {
+        match &self {
+            DurationType::AtMost(gen)  => gen.sample(),
+            DurationType::Between(gen) => gen.sample(),
+            DurationType::Fixed(gen)   => gen.sample()
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct ShootingCooldown {
+    timer: Timer,
+    duration: DurationType 
+}
+
+impl ShootingCooldown {
+    pub fn new(duration: DurationType) -> Self {
+        ShootingCooldown {
+            timer: Timer::new(duration.sample(), false),
+            duration 
+        } 
+    }
+
+    pub fn tick(&mut self, delta: f32) {
+        self.timer.tick(Duration::from_secs_f32(delta));
+    }
+
+    pub fn finished(&self) -> bool {
+        self.timer.finished()
+    }
+
+    pub fn reset(&mut self) {
+        self.timer.set_duration(self.duration.sample());
+        self.timer.reset();
+    }
+}
 
 pub struct Sprites {
     sprites: HashMap<String, Handle<Image>>,
@@ -84,12 +148,12 @@ impl Sprites {
             sprites: HashMap::default(),
         }
     }
-    pub fn add(&mut self, sprite_name: String, sprite: Handle<Image>) {
-        self.sprites.insert(sprite_name, sprite);
+    pub fn add(&mut self, sprite_name: &str, sprite: Handle<Image>) {
+        self.sprites.insert(sprite_name.to_string(), sprite);
     }
 
-    pub fn get(&self, sprite_name: String) -> Handle<Image> {
-        self.sprites.get(&sprite_name).unwrap().clone()
+    pub fn get(&self, sprite_name: &str) -> Handle<Image> {
+        self.sprites.get(sprite_name).unwrap().clone()
     }
 }
 
@@ -103,69 +167,60 @@ pub struct BulletBundle {
 }
 
 impl BulletBundle {
-    pub fn from_aris(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
+    pub fn new(
+        translation: Vec2, 
+        sprite: Handle<Image>,
+        size: Vec2,
+        velocity: Velocity,
+        bullet_type: Bullet 
+    ) -> BulletBundle {
         BulletBundle {
             sprite_bundle: SpriteBundle {
                 transform: Transform {
                     translation: translation.extend(BULLET_LAYER),
-                    scale: Vec3::splat(1.0),
                     ..default()
                 },
                 texture: sprite,
                 sprite: Sprite {
-                    custom_size: Some(BULLET_SIZE),
+                    custom_size: Some(size),
                     ..default()
                 },
                 ..default()
             },
-            velocity: Velocity(Vec2::new(0.0, -ALIEN_BULLET_SPEED)),
-            bullet: Bullet::Alien,
-            collider: Collider { size: BULLET_SIZE },
-        }
+            velocity: velocity,
+            bullet: bullet_type, 
+            collider: Collider { size: size },
+        } 
+    }
+
+    pub fn from_aris(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
+        BulletBundle::new(
+            translation, 
+            sprite, 
+            BULLET_SIZE, 
+            Velocity(Vec2::new(0., -Aris::BULLET_SPEED)), 
+            Bullet::Alien
+        )
     }
 
     pub fn from_rylo(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
-        BulletBundle {
-            sprite_bundle: SpriteBundle {
-                transform: Transform {
-                    translation: translation.extend(BULLET_LAYER),
-                    scale: Vec3::splat(1.0),
-                    ..default()
-                },
-                texture: sprite,
-                sprite: Sprite {
-                    custom_size: Some(BULLET_SIZE),
-                    ..default()
-                },
-                ..default()
-            },
-            velocity: Velocity(Vec2::new(0.0, -Rylo::BULLET_SPEED)),
-            bullet: Bullet::Alien,
-            collider: Collider { size: BULLET_SIZE },
-        }
+        BulletBundle::new(
+            translation, 
+            sprite, 
+            BULLET_SIZE, 
+            Velocity(Vec2::new(0., -Rylo::BULLET_SPEED)), 
+            Bullet::Alien
+        )
     }
 
     pub fn from_ship(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
-        BulletBundle {
-            sprite_bundle: SpriteBundle {
-                texture: sprite,
-                transform: Transform {
-                    translation: translation.extend(BULLET_LAYER),
-                    scale: Vec3::splat(1.0),
-                    ..default()
-                },
-                sprite: Sprite {
-                    custom_size: Some(SHIP_BULLET_SIZE),
-                    ..default()
-                },
-                ..default()
-            },
-            velocity: Velocity(Vec2::new(0.0, SHIP_BULLET_SPEED)),
-            bullet: Bullet::Ship,
-            collider: Collider {
-                size: SHIP_BULLET_SIZE,
-            },
-        }
+        BulletBundle::new(
+            translation, 
+            sprite, 
+            SHIP_BULLET_SIZE, 
+            Velocity(Vec2::new(0., SHIP_BULLET_SPEED)), 
+            Bullet::Ship
+        )
     }
 }
 
@@ -181,11 +236,48 @@ pub enum ImageData {
     Images(Vec<String>),
 }
 
+#[derive(Bundle)]
+pub struct AnimationBundle {
+    animation: BAnimation,
+    animation_state: AnimationState 
+}
+
+impl AnimationBundle {
+    pub fn from_animation(animation: Animation) -> AnimationBundle {
+        AnimationBundle {
+            animation: animation.animation,
+            animation_state: AnimationState::default()
+        }
+    }
+}
+
 // TODO: use readonly public crate
 #[derive(Clone)]
 pub struct Animation {
     pub animation: BAnimation,
     pub image_data: ImageData,
+}
+
+impl Animation {
+    pub fn from_images(images: Vec<String>, frame_duration: u64) -> Animation {
+        Animation {
+            animation: BAnimation(benimator::Animation::from_indices(
+                0..images.len(),
+                FrameRate::from_frame_duration(Duration::from_millis(frame_duration)),
+            )),
+            image_data: ImageData::Images(images)
+        }
+    }
+
+    pub fn from_texture(atlas: Handle<TextureAtlas>, images: u32, frame_duration: u64) -> Animation {
+        Animation {
+            animation: BAnimation(benimator::Animation::from_indices(
+                0..images as usize,
+                FrameRate::from_frame_duration(Duration::from_millis(frame_duration)),
+            )),
+            image_data: ImageData::TextureAtlas(atlas),
+        }
+    }
 }
 
 pub struct Animations {
@@ -198,12 +290,12 @@ impl Animations {
             animations: HashMap::default(),
         }
     }
-    pub fn add(&mut self, animation_name: String, animation: Animation) {
-        self.animations.insert(animation_name, animation);
+    pub fn add(&mut self, animation_name: &str, animation: Animation) {
+        self.animations.insert(animation_name.to_string(), animation);
     }
 
-    pub fn get(&self, animation_name: String) -> Animation {
-        self.animations.get(&animation_name).unwrap().clone()
+    pub fn get(&self, animation_name: &str) -> Animation {
+        self.animations.get(animation_name).unwrap().clone()
     }
 }
 
@@ -254,5 +346,21 @@ impl WallBundle {
                 ..default()
             },
         }
+    }
+}
+
+pub fn duration_between(min_time: f32, max_time: f32) -> Duration {
+    let duration = min_time + random::<f32>() * (max_time - min_time);
+    Duration::from_secs_f32(duration)
+}
+
+pub fn duration_at_most(max_time: f32) -> Duration {
+    let duration = random::<f32>() * max_time;
+    Duration::from_secs_f32(duration)
+}
+
+pub fn update_shooting_cooldowns(mut query: Query<&mut ShootingCooldown>) {
+    for mut cooldown in query.iter_mut() {
+        cooldown.tick(TIME_STEP);
     }
 }

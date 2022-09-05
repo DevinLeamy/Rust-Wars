@@ -1,4 +1,3 @@
-use benimator::FrameRate;
 use std::time::Duration;
 
 use bevy::prelude::*;
@@ -81,6 +80,7 @@ fn main() {
     let mut fixedupdate = SystemStage::parallel();
     fixedupdate.add_system(update_bullets.run_in_state(GameState::Playing));
     fixedupdate.add_system(check_gameover.run_in_state(GameState::Playing));
+    fixedupdate.add_system(update_shooting_cooldowns.run_in_state(GameState::Playing));
     fixedupdate.add_system(update_load_wave.run_in_state(GameState::LoadWaveState));
     fixedupdate.add_system(update_timed);
 
@@ -95,6 +95,9 @@ fn main() {
         })
         .add_loopless_state(GameState::Menu)
         .add_plugins(DefaultPlugins)
+        // startup
+        .add_startup_system(load_assets_and_animations.before(setup))
+        .add_startup_system(setup)
         // fixed update
         .add_stage_before(
             CoreStage::Update,
@@ -113,7 +116,6 @@ fn main() {
         .add_plugin(PlayerPlugin)
         .add_plugin(AliensPlugin)
         .add_plugin(AnimationPlugin::default())
-        .add_startup_system(setup)
         .add_exit_system(GameState::LoadWaveState, reset_scoreboard)
         .add_system(check_wave_end.run_in_state(GameState::Playing))
         .add_enter_system(
@@ -126,13 +128,31 @@ fn main() {
         .run();
 }
 
-fn setup(
-    mut commands: Commands,
+fn load_assets_and_animations(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
     mut animations: ResMut<Animations>,
     mut sprites: ResMut<Sprites>,
 ) {
+    sprites.add("FERRIS_BULLET", asset_server.load("images/rust_white.png"));
+    sprites.add("SPACE_BACKGROUND", asset_server.load("images/space.png"));
+
+    let explosion_atlas = TextureAtlas::from_grid(
+        asset_server.load("images/explosion_sheet.png"),
+        Vec2::new(100.0, 100.0),
+        5, // columns
+        5, // rows
+    );
+    let explosion_animation = Animation::from_texture(
+        texture_atlases.add(explosion_atlas),
+        25,
+        EXPLOSION_FRAME_DURATION_IN_MILLIS 
+    );
+
+    animations.add("EXPLOSION", explosion_animation);
+}
+
+fn setup(mut commands: Commands, sprites: Res<Sprites>, asset_server: Res<AssetServer>) {
     commands.insert_resource(Global {
         is_playing: false,
         wave: None,
@@ -156,7 +176,7 @@ fn setup(
             custom_size: Some(Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT)),
             ..default()
         },
-        texture: asset_server.load("images/space.png"),
+        texture: sprites.get("SPACE_BACKGROUND"),
         ..default()
     });
 
@@ -216,44 +236,11 @@ fn setup(
         )
         .insert(Background);
 
-    // animations
-    let explosion_atlas = TextureAtlas::from_grid(
-        asset_server.load("images/explosion_sheet.png"),
-        Vec2::new(100.0, 100.0),
-        5, // columns
-        5, // rows
-    );
-    let explosion_animation = Animation {
-        animation: BAnimation(benimator::Animation::from_indices(
-            0..25,
-            FrameRate::from_frame_duration(Duration::from_millis(
-                EXPLOSION_FRAME_DURATION_IN_MILLIS,
-            )),
-        )),
-        image_data: ImageData::TextureAtlas(texture_atlases.add(explosion_atlas)),
-    };
-
-    animations.add("EXPLOSION".to_string(), explosion_animation);
-
     // spawn walls
-    commands
-        .spawn()
-        .insert_bundle(WallBundle::new(WallLocation::Left));
-    commands
-        .spawn()
-        .insert_bundle(WallBundle::new(WallLocation::Right));
-    commands
-        .spawn()
-        .insert_bundle(WallBundle::new(WallLocation::Top));
-    commands
-        .spawn()
-        .insert_bundle(WallBundle::new(WallLocation::Bottom));
-
-    // bullets
-    sprites.add(
-        "FERRIS_BULLET".to_string(),
-        asset_server.load("images/rust_white.png"),
-    )
+    commands.spawn().insert_bundle(WallBundle::new(WallLocation::Left));
+    commands.spawn().insert_bundle(WallBundle::new(WallLocation::Right));
+    commands.spawn().insert_bundle(WallBundle::new(WallLocation::Top));
+    commands.spawn().insert_bundle(WallBundle::new(WallLocation::Bottom));
 }
 
 fn update_explosions(

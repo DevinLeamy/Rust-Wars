@@ -1,9 +1,4 @@
-use crate::{
-    aliens::{BULLET_FLASH_DURATION_IN_SECONDS, BULLET_FLASH_SIZE},
-    shared::*,
-    GameState,
-};
-use benimator::FrameRate;
+use crate::{shared::*, GameState};
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use iyes_loopless::prelude::*;
 use rand::random;
@@ -20,9 +15,6 @@ pub const SHIP_WALK_FRAME_DURATION_IN_MILLIS: u64 = 200;
 const HEART_SIZE: Vec2 = Vec2::new(30., 30.);
 const HEART_CORNER_OFFSET: Vec2 = Vec2::new(25., 25.);
 const HEART_PADDING_RIGHT: f32 = 10.0;
-
-// const FERRIS_BULLET_FLASH_SIZE: Vec2 = Vec2::new(120.0, 120.0);
-// const FERRIS_BULLET_FLASH_DURATION_IN_SECONDS: f32 = 0.1;
 
 #[derive(Component)]
 pub struct Ship;
@@ -70,12 +62,12 @@ fn check_for_ship_collisions(
             // ignore bullets from the ship
             continue;
         }
-        if let Some(_collision) = collide(
+        if collide(
             ship_transform.translation,
             ship_collider.size,
             bullet_transform.translation,
             bullet_collider.size,
-        ) {
+        ).is_some() {
             commands.entity(bullet_entity).despawn();
             health.0 -= 1;
 
@@ -92,42 +84,18 @@ fn load_assets_and_animations(
     mut sprites: ResMut<Sprites>,
     mut animations: ResMut<Animations>,
 ) {
-    sprites.add("HEART".to_string(), asset_server.load("images/heart.png"));
-    sprites.add(
-        "ALARMED_FERRIS".to_string(),
-        asset_server.load("images/alarmed_ferris.png"),
-    );
-    sprites.add(
-        "HAPPY_FERRIS".to_string(),
-        asset_server.load("images/ferris.png"),
-    );
-    sprites.add(
-        "FERRIS_BULLET_FLASH".to_string(),
-        asset_server.load("images/ferris_bullet_flash.png"),
-    );
-    sprites.add(
-        "FERRIS_WALK_1".to_string(),
-        asset_server.load("images/ferris_walk/ferris_walk_1.png"),
-    );
-    sprites.add(
-        "FERRIS_WALK_2".to_string(),
-        asset_server.load("images/ferris_walk/ferris_walk_2.png"),
-    );
+    sprites.add("HEART", asset_server.load("images/heart.png"));
+    sprites.add("ALARMED_FERRIS", asset_server.load("images/alarmed_ferris.png"));
+    sprites.add("HAPPY_FERRIS", asset_server.load("images/ferris.png"));
+    sprites.add("FERRIS_BULLET_FLASH", asset_server.load("images/ferris_bullet_flash.png"));
+    sprites.add("FERRIS_WALK_1", asset_server.load("images/ferris_walk/ferris_walk_1.png"));
+    sprites.add("FERRIS_WALK_2", asset_server.load("images/ferris_walk/ferris_walk_2.png"));
 
-    let ferris_walk_animation = Animation {
-        animation: BAnimation(benimator::Animation::from_indices(
-            0..2,
-            FrameRate::from_frame_duration(Duration::from_millis(
-                SHIP_WALK_FRAME_DURATION_IN_MILLIS,
-            )),
-        )),
-        image_data: ImageData::Images(vec![
-            "FERRIS_WALK_1".to_string(),
-            "FERRIS_WALK_2".to_string(),
-        ]),
-    };
-
-    animations.add("FERRIS_WALK".to_string(), ferris_walk_animation);
+    let ferris_walk_animation = Animation::from_images(
+        vec!["FERRIS_WALK_1".to_string(), "FERRIS_WALK_2".to_string()],
+        SHIP_WALK_FRAME_DURATION_IN_MILLIS
+    );
+    animations.add("FERRIS_WALK", ferris_walk_animation);
 }
 
 fn spawn_ship_health_display(mut commands: Commands, sprites: ResMut<Sprites>) {
@@ -154,7 +122,7 @@ fn spawn_ship_health_display(mut commands: Commands, sprites: ResMut<Sprites>) {
                     custom_size: Some(HEART_SIZE),
                     ..default()
                 },
-                texture: sprites.get("HEART".to_string()),
+                texture: sprites.get("HEART"),
                 ..default()
             })
             .insert(Name::new("Health Display Heart"));
@@ -202,10 +170,11 @@ fn spawn_player(
                 custom_size: Some(SHIP_SIZE),
                 ..default()
             },
-            texture: sprites.get("HAPPY_FERRIS".to_string()),
+            texture: sprites.get("HAPPY_FERRIS"),
             ..default()
         })
-        .insert(animations.get("FERRIS_WALK".to_string()).animation)
+        .insert(ShootingCooldown::new(DurationType::Fixed(Fixed(SHOOTING_COOLDOWN_IN_SECONDS))))
+        .insert(animations.get("FERRIS_WALK").animation)
         .insert(AnimationState::default())
         .insert(FerrisState::IDLE)
         .insert(Collider { size: SHIP_SIZE });
@@ -215,10 +184,9 @@ fn update_ship(
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<
         (
-            Entity,
             &mut Transform,
             &mut FerrisState,
-            Option<&mut ShootingCooldown>,
+            &mut ShootingCooldown,
             &Collider,
         ),
         With<Ship>,
@@ -226,7 +194,7 @@ fn update_ship(
     sprites: Res<Sprites>,
     mut commands: Commands,
 ) {
-    let (ship, mut transform, mut state, mut shooting_cooldown, collider) = query.single_mut();
+    let (mut transform, mut state, mut shooting_cooldown, collider) = query.single_mut();
 
     if *state == FerrisState::DEAD {
         return;
@@ -255,30 +223,16 @@ fn update_ship(
         RIGHT_WALL - collider.size.x / 2.0 - WALL_THICKNESS,
     );
 
-    // update cooldown timer
-    if let Some(cooldown_timer) = &mut shooting_cooldown {
-        if cooldown_timer.finished() {
-            commands.entity(ship).remove::<ShootingCooldown>();
-        } else {
-            cooldown_timer.tick(Duration::from_secs_f32(TIME_STEP));
-        }
-    }
+    if shoot && shooting_cooldown.finished() {
+        shooting_cooldown.reset();
 
-    if shoot && shooting_cooldown.is_none() {
         let offset = if random::<f32>() < 0.5 { 1.0 } else { -1.0 };
         let bullet_x = transform.translation.x + offset * SHIP_SIZE.x / 2.;
         let bullet_y = transform.translation.y + transform.scale.y / 2. + SHIP_BULLET_INITIAL_GAP;
 
-        commands
-            .entity(ship)
-            .insert(ShootingCooldown(Timer::from_seconds(
-                SHOOTING_COOLDOWN_IN_SECONDS,
-                false,
-            )));
-
         commands.spawn().insert_bundle(BulletBundle::from_ship(
             Vec2::new(bullet_x, bullet_y),
-            sprites.get("FERRIS_BULLET".to_string()),
+            sprites.get("FERRIS_BULLET"),
         ));
     }
 }
@@ -296,7 +250,7 @@ fn update_ferris_display(
     sprites: Res<Sprites>,
     animations: Res<Animations>,
 ) {
-    let ferris_walk_animation = animations.get("FERRIS_WALK".to_string());
+    let ferris_walk_animation = animations.get("FERRIS_WALK");
     let images = match &ferris_walk_animation.image_data {
         ImageData::Images(images) => images,
         _ => panic!("Image data not found"),
@@ -306,14 +260,14 @@ fn update_ferris_display(
 
     match ferris_state {
         FerrisState::IDLE => {
-            *texture = sprites.get("HAPPY_FERRIS".to_string());
+            *texture = sprites.get("HAPPY_FERRIS");
         }
         FerrisState::WALKING => {
             animation_state.update(ferris_animation, Duration::from_secs_f32(TIME_STEP));
-            *texture = sprites.get(images[animation_state.frame_index() as usize].clone());
+            *texture = sprites.get(images[animation_state.frame_index() as usize].as_str());
         }
         FerrisState::DEAD => {
-            *texture = sprites.get("ALARMED_FERRIS".to_string());
+            *texture = sprites.get("ALARMED_FERRIS");
         }
     }
 }
