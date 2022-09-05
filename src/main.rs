@@ -1,4 +1,4 @@
-use std::{time::Duration, path::Path};
+use std::{time::Duration};
 
 use bevy::prelude::*;
 use bevy_tweening::TweeningPlugin;
@@ -108,7 +108,6 @@ fn main() {
         // resources
         .insert_resource(Animations::new())
         .insert_resource(Sprites::new())
-        .insert_resource(Scoreboard { score: 0 })
         // plugins
         .add_plugin(TweeningPlugin)
         .add_plugin(DebugPlugin)
@@ -117,13 +116,12 @@ fn main() {
         .add_plugin(PlayerPlugin)
         .add_plugin(AliensPlugin)
         .add_plugin(AnimationPlugin::default())
-        .add_exit_system(GameState::LoadWaveState, reset_scoreboard)
         .add_system(check_wave_end.run_in_state(GameState::Playing))
         .add_enter_system(
             GameState::LoadWaveState,
-            setup_load_wave.before(reset_scoreboard),
+            setup_load_wave,
         )
-        .add_system(update_scoreboard)
+        .add_system(update_scoreboard.run_in_state(GameState::Playing))
         .add_system(update_explosions)
         .add_system(bevy::window::close_on_esc)
         .run();
@@ -179,63 +177,7 @@ fn setup(mut commands: Commands, sprites: Res<Sprites>, asset_server: Res<AssetS
         },
         texture: sprites.get("SPACE_BACKGROUND"),
         ..default()
-    });
-
-    // spawn scoreboard
-    commands
-        .spawn()
-        .insert_bundle(
-            TextBundle::from_sections([
-                TextSection::new(
-                    "Score: ",
-                    TextStyle {
-                        font_size: SCOREBOARD_FONT_SIZE,
-                        color: SCORE_COLOR,
-                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    },
-                ),
-                TextSection::from_style(TextStyle {
-                    font_size: SCOREBOARD_FONT_SIZE,
-                    color: SCORE_COLOR,
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                }),
-            ])
-            .with_style(Style {
-                position_type: PositionType::Absolute,
-                position: UiRect {
-                    top: SCOREBOARD_PADDING_TOP,
-                    left: SCOREBOARD_PADDING_LEFT,
-                    ..default()
-                },
-                ..default()
-            }),
-        )
-        .insert(Scoreboard { score: 0 });
-
-    // background
-    commands
-        .spawn()
-        .insert_bundle(
-            TextBundle::from_sections([TextSection::new(
-                "{ RustConf 2173 }",
-                TextStyle {
-                    font_size: BACKGROUND_FONT_SIZE,
-                    color: BACKGROUND_FONT_COLOR,
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                },
-            )])
-            .with_text_alignment(TextAlignment::CENTER)
-            .with_style(Style {
-                position_type: PositionType::Absolute,
-                position: UiRect {
-                    top: Val::Px(10.0),
-                    right: Val::Px(10.0),
-                    ..default()
-                },
-                ..default()
-            }),
-        )
-        .insert(Background);
+    }); 
 
     // spawn walls
     commands.spawn().insert_bundle(WallBundle::new(WallLocation::Left));
@@ -266,13 +208,6 @@ fn update_explosions(
         }
         animation_state.update(explosion_animation, Duration::from_secs_f32(TIME_STEP));
         texture_atlas.index = animation_state.frame_index();
-    }
-}
-
-fn reset_scoreboard(mut scoreboard: ResMut<Scoreboard>, global: Res<Global>) {
-    // Only reset the scoreboard if we're entering the first wave
-    if global.current_wave() == 0 {
-        scoreboard.score = 0;
     }
 }
 
@@ -317,12 +252,54 @@ fn update_timed(mut commands: Commands, mut query: Query<(Entity, &mut DespawnTi
     }
 }
 
-fn setup_load_wave(mut commands: Commands, global: ResMut<Global>) {
+fn setup_load_wave(
+    mut commands: Commands, 
+    global: ResMut<Global>,
+    asset_server: Res<AssetServer>,
+    scoreboard_query: Query<Entity, With<Scoreboard>>
+) {
     println!("Loading Wave: {}", global.current_wave());
+    
     commands.insert_resource(LoadWaveTimer(Timer::from_seconds(
         LOAD_WAVE_DURATION_IN_SECONDS + 3.0,
         false,
     )));
+
+    for scoreboard in scoreboard_query.iter() { 
+        commands.entity(scoreboard).despawn();
+    }
+    commands.remove_resource::<Scoreboard>();
+
+    // spawn scoreboard
+    commands
+        .spawn()
+        .insert_bundle(
+            TextBundle::from_sections([
+                TextSection::new(
+                    "Score: ",
+                    TextStyle {
+                        font_size: SCOREBOARD_FONT_SIZE,
+                        color: SCORE_COLOR,
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    },
+                ),
+                TextSection::new("0", TextStyle {
+                    font_size: SCOREBOARD_FONT_SIZE,
+                    color: SCORE_COLOR,
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                }),
+            ])
+            .with_style(Style {
+                position_type: PositionType::Absolute,
+                position: UiRect {
+                    top: SCOREBOARD_PADDING_TOP,
+                    left: SCOREBOARD_PADDING_LEFT,
+                    ..default()
+                },
+                ..default()
+            }),
+        ).insert(Scoreboard { score: 0 });
+    commands.insert_resource(Scoreboard { score: 0 })
 }
 
 fn update_load_wave(mut commands: Commands, mut timer: ResMut<LoadWaveTimer>) {

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use rand::random;
 use std::{collections::HashMap, time::Duration};
 
-use crate::{aliens::{Rylo, Aris}, player::SHIP_BULLET_SIZE};
+use crate::{aliens::{Rylo, Aris, Zorg}, player::SHIP_BULLET_SIZE};
 
 pub const TIME_STEP: f32 = 1.0 / 60.0;
 pub const CAMERA_LEVEL: f32 = 1.0;
@@ -153,7 +153,7 @@ impl Sprites {
     }
 
     pub fn get(&self, sprite_name: &str) -> Handle<Image> {
-        self.sprites.get(sprite_name).unwrap().clone()
+        self.sprites.get(sprite_name).expect(format!("Sprite ({}) not found", sprite_name).as_str()).clone()
     }
 }
 
@@ -172,12 +172,14 @@ impl BulletBundle {
         sprite: Handle<Image>,
         size: Vec2,
         velocity: Velocity,
+        rotation: f32,
         bullet_type: Bullet 
     ) -> BulletBundle {
         BulletBundle {
             sprite_bundle: SpriteBundle {
                 transform: Transform {
                     translation: translation.extend(BULLET_LAYER),
+                    rotation: Quat::from_rotation_z(rotation.to_radians()),
                     ..default()
                 },
                 texture: sprite,
@@ -187,9 +189,9 @@ impl BulletBundle {
                 },
                 ..default()
             },
-            velocity: velocity,
+            velocity,
             bullet: bullet_type, 
-            collider: Collider { size: size },
+            collider: Collider { size },
         } 
     }
 
@@ -199,6 +201,7 @@ impl BulletBundle {
             sprite, 
             BULLET_SIZE, 
             Velocity(Vec2::new(0., -Aris::BULLET_SPEED)), 
+            0.0,
             Bullet::Alien
         )
     }
@@ -209,8 +212,20 @@ impl BulletBundle {
             sprite, 
             BULLET_SIZE, 
             Velocity(Vec2::new(0., -Rylo::BULLET_SPEED)), 
+            0.0,
             Bullet::Alien
         )
+    }
+
+    pub fn from_zorg(translation: Vec2, sprite: Handle<Image>, velocity: Velocity, rotation: f32) -> BulletBundle {
+        BulletBundle::new(
+            translation, 
+            sprite, 
+            Zorg::BULLET_SIZE, 
+            velocity,
+            rotation,
+            Bullet::Alien
+        ) 
     }
 
     pub fn from_ship(translation: Vec2, sprite: Handle<Image>) -> BulletBundle {
@@ -219,6 +234,7 @@ impl BulletBundle {
             sprite, 
             SHIP_BULLET_SIZE, 
             Velocity(Vec2::new(0., SHIP_BULLET_SPEED)), 
+            0.0,
             Bullet::Ship
         )
     }

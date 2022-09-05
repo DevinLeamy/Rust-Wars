@@ -25,7 +25,10 @@ fn create_gameover_screen(
         commands.entity(alien_entity).despawn();
     }
 
-    commands.spawn().insert(GameOverMenu).insert_bundle(
+    commands
+        .spawn()
+        .insert(GameOverMenu)
+        .insert_bundle(
         TextBundle::from_sections([
             TextSection::new(
                 "GAME OVER\n\n",

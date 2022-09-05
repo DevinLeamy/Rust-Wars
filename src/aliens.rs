@@ -45,6 +45,95 @@ impl Aris {
     pub const BULLET_SPEED: f32 = 300.0;
     pub const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 10.;
     pub const INITIAL_DIRECTION: f32 = 1.; // right
+    pub const LAYER: f32 = 0.1;
+}
+
+#[derive(Component)]
+pub struct Zorg;
+
+impl Zorg {
+    pub const SIZE: Vec2 = Vec2::new(70.0, 70.);
+    pub const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.0;
+    pub const SCORE_VALUE: u32 = 20;
+    pub const LAYER: f32 = 0.2;
+    pub const BULLET_SIZE: Vec2 = Vec2::new(30.0, 60.0);
+    pub const BULLET_SPEED: f32 = 150.0;
+}
+
+impl Zorg {
+    fn update(
+        mut query: Query<(Entity, &mut Transform, &mut ShootingCooldown), With<Zorg>>,
+        mut commands: Commands,
+        sprites: Res<Sprites>
+    ) {
+        for (entity, transform, mut cooldown) in query.iter_mut() {
+            if !cooldown.finished() {
+                continue;
+            }
+            cooldown.reset();
+
+            Zorg::shoot(
+                entity, 
+                transform.translation.truncate(), 
+                Vec2::new(-0.3 * Zorg::BULLET_SPEED, -0.7 * Zorg::BULLET_SPEED),
+                &mut commands,
+                &sprites
+            );
+
+            Zorg::shoot(
+                entity, 
+                transform.translation.truncate(), 
+                Vec2::new(0.0 * Zorg::BULLET_SPEED, -1.0 * Zorg::BULLET_SPEED),
+                &mut commands,
+                &sprites
+            );
+
+            Zorg::shoot(
+                entity, 
+                transform.translation.truncate(), 
+                Vec2::new(0.3 * Zorg::BULLET_SPEED, -0.7 * Zorg::BULLET_SPEED),
+                &mut commands,
+                &sprites
+            );
+        }
+
+    }
+
+    fn shoot(zorg_entity: Entity, origin: Vec2, velocity: Vec2, commands: &mut Commands, sprites: &Res<Sprites>) {
+        let rotation;
+        if velocity.x == 0.0 {
+            rotation = 0.0
+        } else {
+            let angle = 90.0 - f32::atan(velocity.y.abs() / velocity.x.abs()).to_degrees();
+            rotation = angle * velocity.x.signum();
+        }
+
+        commands.spawn().insert_bundle(BulletBundle::from_zorg(
+            origin,
+            sprites.get("ZORG_BULLET"),
+            Velocity(velocity),
+            rotation
+        ));
+
+        let bullet_flash = commands
+            .spawn()
+            .insert_bundle(SpriteBundle {
+                transform: Transform {
+                    translation: Vec2::new(0.0, 0.0).extend(1.0),
+                    ..default()
+                },
+                sprite: Sprite {
+                    custom_size: Some(BULLET_FLASH_SIZE),
+                    ..default()
+                },
+                texture: sprites.get("ZORG_BULLET_FLASH"),
+                ..default()
+            })
+            .insert(DespawnTimer::from_seconds(BULLET_FLASH_DURATION_IN_SECONDS))
+            .id();
+
+        commands.entity(zorg_entity).add_child(bullet_flash); 
+    }
 }
 
 #[derive(Component)]
@@ -53,12 +142,13 @@ pub struct Rylo;
 impl Rylo {
     const SIZE: Vec2 = Vec2::new(40.0, 40.);
     pub const BULLET_SPEED: f32 = 300.0;
-    const DESTROY_ALIEN_SCORE: u32 = 10;
+    const SCORE_VALUE: u32 = 10;
     const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.0;
     const POSITION_TWEEN_COMPLETE: u64 = 1;
     const POSITION_DELAY_COMPLETE: u64 = 2;
     const POSITION_TWEEN_DELAY: f32 = 10.0;
     const POSITION_TWEEN_DURATION: f32 = 10.0;
+    pub const LAYER: f32 = 0.3;
 }
 
 impl Rylo {
@@ -72,39 +162,38 @@ impl Rylo {
         sprites: Res<Sprites>
     ) {
         for (alien_entity, transform, mut cooldown) in query.iter_mut() {
-            cooldown.tick(TIME_STEP);
-            // update cooldown timer
-            if cooldown.finished() {
-                let offset = if random::<f32>() < 0.5 { 1.0 } else { -1.0 };
-                let bullet_x = transform.translation.x + offset * Aris::SIZE.x / 2.;
-                let bullet_y = transform.translation.y - Aris::SIZE.y / 4.;
+            if !cooldown.finished() {
+                continue;
+            }
+            cooldown.reset();
 
-                commands.spawn().insert_bundle(BulletBundle::from_rylo(
-                    Vec2::new(bullet_x, bullet_y),
-                    sprites.get("RYLO_BULLET"),
-                ));
+            let offset = if random::<f32>() < 0.5 { 1.0 } else { -1.0 };
+            let bullet_x = transform.translation.x + offset * Aris::SIZE.x / 2.;
+            let bullet_y = transform.translation.y - Aris::SIZE.y / 4.;
 
-                let bullet_flash = commands
-                    .spawn()
-                    .insert_bundle(SpriteBundle {
-                        transform: Transform {
-                            translation: Vec2::new(offset * Aris::SIZE.x / 2., 0.).extend(1.0),
-                            ..default()
-                        },
-                        sprite: Sprite {
-                            custom_size: Some(BULLET_FLASH_SIZE),
-                            ..default()
-                        },
-                        texture: sprites.get("RYLO_BULLET_FLASH"),
+            commands.spawn().insert_bundle(BulletBundle::from_rylo(
+                Vec2::new(bullet_x, bullet_y),
+                sprites.get("RYLO_BULLET"),
+            ));
+
+            let bullet_flash = commands
+                .spawn()
+                .insert_bundle(SpriteBundle {
+                    transform: Transform {
+                        translation: Vec2::new(offset * Aris::SIZE.x / 2., 0.).extend(1.0),
                         ..default()
-                    })
-                    .insert(DespawnTimer::from_seconds(BULLET_FLASH_DURATION_IN_SECONDS))
-                    .id();
+                    },
+                    sprite: Sprite {
+                        custom_size: Some(BULLET_FLASH_SIZE),
+                        ..default()
+                    },
+                    texture: sprites.get("RYLO_BULLET_FLASH"),
+                    ..default()
+                })
+                .insert(DespawnTimer::from_seconds(BULLET_FLASH_DURATION_IN_SECONDS))
+                .id();
 
-                commands.entity(alien_entity).add_child(bullet_flash);
-
-                cooldown.reset();
-            } 
+            commands.entity(alien_entity).add_child(bullet_flash);
         }
    }
 
@@ -117,32 +206,31 @@ impl Rylo {
                 continue;
             }
 
-            let tween;
-
             let alien_transform = query.get(entity).expect("rylo not found");
             let translation = alien_transform.translation.truncate();
 
-            if tween_id == Rylo::POSITION_TWEEN_COMPLETE {
-                tween = Rylo::position_tween(
-                    translation, 
-                    translation, 
-                    Rylo::POSITION_DELAY_COMPLETE,
-                    DurationType::Between(Between(1., Rylo::POSITION_TWEEN_DELAY))
-                ); 
-            } else if tween_id == Rylo::POSITION_DELAY_COMPLETE {
-
-                let ending_x = LEFT_WALL + (random::<f32>() * WINDOW_WIDTH);
-                let ending_y = BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT / 2.0);
-
-                tween = Rylo::position_tween(
-                    alien_transform.translation.truncate(), 
-                    Vec2::new(ending_x, ending_y),
-                    Rylo::POSITION_TWEEN_COMPLETE,
-                    DurationType::Between(Between(1., Rylo::POSITION_TWEEN_DURATION)) 
-                );
-            } else {
-                panic!("Never reached");
-            }
+            let tween = match tween_id {
+                Rylo::POSITION_TWEEN_COMPLETE => {
+                    Rylo::position_tween(
+                        translation, 
+                        translation, 
+                        Rylo::POSITION_DELAY_COMPLETE,
+                        DurationType::Between(Between(1., Rylo::POSITION_TWEEN_DELAY))
+                    )
+                },
+                Rylo::POSITION_DELAY_COMPLETE => {
+                    let ending_x = LEFT_WALL + (random::<f32>() * WINDOW_WIDTH);
+                    let ending_y = BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT / 2.0);
+    
+                    Rylo::position_tween(
+                        alien_transform.translation.truncate(), 
+                        Vec2::new(ending_x, ending_y),
+                        Rylo::POSITION_TWEEN_COMPLETE,
+                        DurationType::Between(Between(1., Rylo::POSITION_TWEEN_DURATION)) 
+                    )
+                },
+                _ => panic!("INVALID TWEEN ID")
+            };
 
             commands.entity(entity).insert(Animator::new(tween));
         }         
@@ -159,6 +247,7 @@ impl Plugin for AliensPlugin {
                 .label("Alien Updates")
                 .run_in_state(GameState::Playing)
                 .with_system(Rylo::update)
+                .with_system(Zorg::update)
                 .with_system(update_aris_aliens)
                 .into(),
         );
@@ -182,6 +271,11 @@ fn load_assets(
     mut sprites: ResMut<Sprites>,
     mut animations: ResMut<Animations>,
 ) {
+    sprites.add("ARIS_ALIEN", asset_server.load("images/alien_ferris.png"));
+    sprites.add("ZORG_ALIEN", asset_server.load("images/robot_ferris.png"));
+    sprites.add("ZORG_BULLET_FLASH", asset_server.load("images/zorg_bullet_flash.png"));
+    sprites.add("ZORG_BULLET", asset_server.load("images/zorg_bullet.png"));
+
     sprites.add("ALIEN_BULLET", asset_server.load("images/alien_bullet/bullet.png"));
     sprites.add("ALIEN_BULLET_FLASH", asset_server.load("images/alien_bullet/bullet_flash.png"));
     sprites.add("ALIEN_WALK_1", asset_server.load("images/alien_ferris/walk_1.png"));
@@ -223,12 +317,20 @@ struct RyloAlienBundle {
     name: Name,
 }
 
+#[derive(Bundle)]
+struct ZorgAlienBundle {
+    #[bundle]
+    alien_bundle: AlienBundle,
+    zorg: Zorg,
+    name: Name,
+}
+
 impl AlienBundle {
-    fn new(translation: Vec2, size: Vec2, texture: Handle<Image>, cooldown: DurationType) -> AlienBundle {
+    fn new(translation: Vec3, size: Vec2, texture: Handle<Image>, cooldown: DurationType) -> AlienBundle {
         AlienBundle {
             alien: Alien,
             sprite_bundle: SpriteBundle {
-                transform: Transform { translation: translation.extend(0.0), ..default() },
+                transform: Transform { translation, ..default() },
                 sprite: Sprite { custom_size: Some(size), ..default() },
                 texture,
                 ..default()
@@ -238,29 +340,42 @@ impl AlienBundle {
         }
     }
 
-    fn new_aris(translation: Vec2, velocity: Vec2, texture: Handle<Image>) -> ArisAlienBundle {
+    fn new_aris(translation: Vec2, velocity: Vec2, sprites: &Res<Sprites>) -> ArisAlienBundle {
         ArisAlienBundle {
             name: Name::new("Aris"), 
             aris: Aris,
             alien_bundle: AlienBundle::new(
-                translation, 
+                translation.extend(Aris::LAYER), 
                 Aris::SIZE, 
-                texture, 
+                sprites.get("ARIS_ALIEN"), 
                 DurationType::AtMost(AtMost(Aris::MAX_SHOOTING_COOLDOWN_IN_SECONDS))
             ),
             velocity: Velocity(velocity),
         }
     }
 
-    fn new_rylo(translation: Vec2, texture: Handle<Image>) -> RyloAlienBundle {
+    fn new_rylo(translation: Vec2, sprites: &Res<Sprites>) -> RyloAlienBundle {
         RyloAlienBundle {
             name: Name::new("Rylo"),
             rylo: Rylo,
             alien_bundle: AlienBundle::new(
-                translation, 
+                translation.extend(Rylo::LAYER), 
                 Rylo::SIZE, 
-                texture, 
+                sprites.get("RYLO_ALIEN"), 
                 DurationType::AtMost(AtMost(Rylo::MAX_SHOOTING_COOLDOWN_IN_SECONDS))
+            ),
+        }
+    }
+
+    fn new_zorg(translation: Vec2, sprites: &Res<Sprites>) -> ZorgAlienBundle {
+        ZorgAlienBundle {
+            name: Name::new("Zorg"),
+            zorg: Zorg,
+            alien_bundle: AlienBundle::new(
+                translation.extend(Zorg::LAYER), 
+                Zorg::SIZE, 
+                sprites.get("ZORG_ALIEN"), 
+                DurationType::AtMost(AtMost(Zorg::MAX_SHOOTING_COOLDOWN_IN_SECONDS))
             ),
         }
     }
@@ -275,6 +390,7 @@ fn spawn_aliens(
     match global.current_wave() {
         0 => Wave::load_from_file("assets/waves/wave_0.txt").initialize(commands, sprites, animations),
         1 => Wave::load_from_file("assets/waves/wave_1.txt").initialize(commands, sprites, animations),
+        2 => Wave::load_from_file("assets/waves/wave_2.txt").initialize(commands, sprites, animations),
         _ => panic!("Wave not implemented"),
     }
 }
@@ -348,12 +464,12 @@ fn update_aris_aliens(
 
 fn check_for_alien_collisions(
     mut scoreboard: ResMut<Scoreboard>,
-    alien_query: Query<(Entity, &Transform, &Collider, Option<&Rylo>, Option<&Aris>), With<Alien>>,
+    alien_query: Query<(Entity, &Transform, &Collider, Option<&Rylo>, Option<&Aris>, Option<&Zorg>), With<Alien>>,
     bullet_query: Query<(Entity, &Bullet, &Transform, &Collider)>,
     animations: Res<Animations>,
     mut commands: Commands,
 ) {
-    for (alien_entity, transform, alien_collider, maybe_rylo, maybe_aris) in &alien_query {
+    for (alien_entity, transform, alien_collider, maybe_rylo, maybe_aris, maybe_zorg) in &alien_query {
         for (bullet_entity, bullet, bullet_transform, bullet_collider) in &bullet_query {
             if bullet == &Bullet::Alien {
                 continue;
@@ -388,8 +504,9 @@ fn check_for_alien_collisions(
                     .insert_bundle(AnimationBundle::from_animation(explosion))
                     .insert(Explosion);
 
-                if maybe_rylo.is_some() { scoreboard.score += Rylo::DESTROY_ALIEN_SCORE; } 
+                if maybe_rylo.is_some() { scoreboard.score += Rylo::SCORE_VALUE; } 
                 else if maybe_aris.is_some() { scoreboard.score += DESTROY_ALIEN_SCORE; }
+                else if maybe_zorg.is_some() { scoreboard.score += Zorg::SCORE_VALUE; }
 
                 break;
             }
@@ -444,6 +561,7 @@ impl Wave {
                     '#' => continue,
                     'a' => Wave::initialize_aris(&sprites, &animations, &mut commands, row as u32, col as u32),
                     'r' => Wave::initialize_rylo(&sprites, &mut commands, row as u32, col as u32), 
+                    'z' => Wave::initialize_zorg(&sprites, &mut commands, row as u32, col as u32),
                     _   => panic!("INVALID WAVE LAYOUT") 
                 }
             }
@@ -463,21 +581,21 @@ impl Wave {
         Vec2::new(alien_x, alien_y)
     }
 
-    fn initialize_aris(sprites: &Res<Sprites>, animations: &Res<Animations>, commands: &mut Commands, row: u32, col: u32) {
-        let starting_translation = Vec2::new(
+    pub fn get_starting_location() -> Vec2 {
+        Vec2::new(
             LEFT_WALL + (random::<f32>() * WINDOW_WIDTH),
             BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT)
-        );
+        ) 
+    }
+
+    fn initialize_aris(sprites: &Res<Sprites>, animations: &Res<Animations>, commands: &mut Commands, row: u32, col: u32) {
+        let starting_translation = Wave::get_starting_location(); 
         let ending_translation = Wave::get_translation(row, col);
 
-        let position_tween = Tween::new(
-            EaseFunction::QuadraticInOut,
-            TweeningType::Once,
-            Duration::from_secs_f32(LOAD_WAVE_DURATION_IN_SECONDS * f32::min(1.0, random::<f32>() + 0.25)),
-            TransformPositionLens {
-                start: starting_translation.extend(0.0),
-                end: ending_translation.extend(0.0),
-            },
+        let position_tween = Alien::position_tween(
+            starting_translation,
+            ending_translation,
+            DurationType::Between(Between(0.25, LOAD_WAVE_DURATION_IN_SECONDS))
         );
 
         commands
@@ -485,17 +603,14 @@ impl Wave {
             .insert_bundle(AlienBundle::new_aris(
                 starting_translation,
                 Vec2::new(Aris::SPEED * Aris::INITIAL_DIRECTION, 0.0),
-                sprites.get("ALIEN_WALK_1") 
+                sprites 
             ))
             .insert_bundle(AnimationBundle::from_animation(animations.get("ALIEN_WALK")))
             .insert(Animator::new(position_tween));
     }
 
     fn initialize_rylo(sprites: &Res<Sprites>, commands: &mut Commands, row: u32, col: u32) {
-        let starting_translation = Vec2::new(
-            LEFT_WALL + (random::<f32>() * WINDOW_WIDTH),
-            BOTTOM_WALL + WINDOW_HEIGHT / 2.0 + (random::<f32>() * WINDOW_HEIGHT)
-        );
+        let starting_translation = Wave::get_starting_location(); 
         let ending_translation = Wave::get_translation(row, col);
 
         let position_tween = Rylo::position_tween(
@@ -509,7 +624,26 @@ impl Wave {
             .spawn()
             .insert_bundle(AlienBundle::new_rylo(
                 starting_translation,
-                sprites.get("RYLO_ALIEN"),
+                sprites,
+            ))
+            .insert(Animator::new(position_tween));
+    }
+
+    fn initialize_zorg(sprites: &Res<Sprites>, commands: &mut Commands, row: u32, col: u32) {
+        let starting_translation = Wave::get_starting_location(); 
+        let ending_translation = Wave::get_translation(row, col);
+
+        let position_tween = Alien::position_tween(
+            starting_translation,
+            ending_translation,
+            DurationType::Between(Between(0.25, LOAD_WAVE_DURATION_IN_SECONDS))
+        );
+
+        commands
+            .spawn()
+            .insert_bundle(AlienBundle::new_zorg(
+                starting_translation,
+                sprites,
             ))
             .insert(Animator::new(position_tween));
     }
