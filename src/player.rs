@@ -1,16 +1,20 @@
-use crate::{shared::*, GameState};
+use crate::{shared::*, GameState, aliens::BULLET_FLASH_DURATION_IN_SECONDS};
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use iyes_loopless::prelude::*;
 use rand::random;
 use std::time::Duration;
 
 const SHIP_SIZE: Vec2 = Vec2::new(120., 80.);
+const SHIP_COLLISION_SIZE: Vec2 = Vec2::new(110., 70.);
 const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 5.0;
 const SHIP_SPEED: f32 = 450.;
 const SHOOTING_COOLDOWN_IN_SECONDS: f32 = 0.8;
-pub const SHIP_BULLET_SIZE: Vec2 = Vec2::new(33.0, 33.0);
+pub const SHIP_BULLET_SIZE: Vec2 = Vec2::new(33.0, 70.0);
+pub const SHIP_BULLET_FLASH_SIZE: Vec2 = Vec2::new(120.0, 120.0);
 pub const INITIAL_HEALTH_POINTS: u32 = 5;
 pub const SHIP_WALK_FRAME_DURATION_IN_MILLIS: u64 = 200;
+pub const HIT_MARKER_SIZE: Vec2 =  Vec2::new(25.0, 25.0); 
+pub const HIT_MARKER_DURATION: f32 = 0.75;
 
 const HEART_SIZE: Vec2 = Vec2::new(30., 30.);
 const HEART_CORNER_OFFSET: Vec2 = Vec2::new(25., 25.);
@@ -52,23 +56,57 @@ impl Plugin for PlayerPlugin {
 
 fn check_for_ship_collisions(
     mut commands: Commands,
-    mut ship_query: Query<(&Transform, &mut Health, &Collider, &mut FerrisState), With<Ship>>,
+    mut ship_query: Query<(Entity, &Transform, &mut Health, &Collider, &mut FerrisState), With<Ship>>,
+    sprites: Res<Sprites>,
     bullet_query: Query<(Entity, &Transform, &Bullet, &Collider)>,
 ) {
-    let (ship_transform, mut health, ship_collider, mut ferris_state) = ship_query.single_mut();
+    let (ship_entity, ship_transform, mut health, ship_collider, mut ferris_state) = ship_query.single_mut();
+
+    let min_bullet_hit_height = ship_transform.translation.y;
 
     for (bullet_entity, bullet_transform, bullet, bullet_collider) in bullet_query.iter() {
         if bullet == &Bullet::Ship {
             // ignore bullets from the ship
             continue;
         }
+
+        let bullet_translation = bullet_transform.translation;
+
+        if bullet_translation.y < min_bullet_hit_height {
+            continue;
+        }
+
         if collide(
             ship_transform.translation,
             ship_collider.size,
-            bullet_transform.translation,
+            bullet_translation,
             bullet_collider.size,
         ).is_some() {
             commands.entity(bullet_entity).despawn();
+
+            let hit_marker = commands
+                    .spawn()
+                    .insert_bundle(SpriteBundle {
+                        transform: Transform {
+                            translation: Vec3::new(
+                                bullet_translation.x - ship_transform.translation.x,
+                                bullet_translation.y - ship_transform.translation.y - 20.0,
+                                0.2
+                            ),
+                            ..default()
+                        },
+                        texture: sprites.get("HIT_MARKER"),
+                        sprite: Sprite {
+                            custom_size: Some(HIT_MARKER_SIZE),
+                            ..default()
+                        },
+                        ..default()
+                    })
+                    .insert(DespawnTimer::from_seconds(HIT_MARKER_DURATION))
+                    .id();
+            
+            commands.entity(ship_entity).add_child(hit_marker);
+
             health.0 -= 1;
 
             if health.0 == 0 {
@@ -85,8 +123,10 @@ fn load_assets_and_animations(
     mut animations: ResMut<Animations>,
 ) {
     sprites.add("HEART", asset_server.load("images/heart.png"));
+    sprites.add("HIT_MARKER", asset_server.load("images/hit_marker.png"));
     sprites.add("ALARMED_FERRIS", asset_server.load("images/alarmed_ferris.png"));
     sprites.add("HAPPY_FERRIS", asset_server.load("images/ferris.png"));
+    sprites.add("FERRIS_BULLET", asset_server.load("images/ferris_bullet.png"));
     sprites.add("FERRIS_BULLET_FLASH", asset_server.load("images/ferris_bullet_flash.png"));
     sprites.add("FERRIS_WALK_1", asset_server.load("images/ferris_walk/ferris_walk_1.png"));
     sprites.add("FERRIS_WALK_2", asset_server.load("images/ferris_walk/ferris_walk_2.png"));
@@ -177,13 +217,14 @@ fn spawn_player(
         .insert(animations.get("FERRIS_WALK").animation)
         .insert(AnimationState::default())
         .insert(FerrisState::IDLE)
-        .insert(Collider { size: SHIP_SIZE });
+        .insert(Collider { size: SHIP_COLLISION_SIZE});
 }
 
 fn update_ship(
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<
         (
+            Entity,
             &mut Transform,
             &mut FerrisState,
             &mut ShootingCooldown,
@@ -194,7 +235,7 @@ fn update_ship(
     sprites: Res<Sprites>,
     mut commands: Commands,
 ) {
-    let (mut transform, mut state, mut shooting_cooldown, collider) = query.single_mut();
+    let (ship_entity, mut transform, mut state, mut shooting_cooldown, collider) = query.single_mut();
 
     if *state == FerrisState::DEAD {
         return;
@@ -234,6 +275,27 @@ fn update_ship(
             Vec2::new(bullet_x, bullet_y),
             sprites.get("FERRIS_BULLET"),
         ));
+
+        let bullet_flash = commands
+            .spawn()
+            .insert_bundle(SpriteBundle {
+                transform: Transform {
+                    translation: Vec2::new(offset * SHIP_SIZE.x / 2., 20.).extend(1.0),
+                    ..default()
+                },
+                sprite: Sprite {
+                    custom_size: Some(SHIP_BULLET_FLASH_SIZE),
+                    ..default()
+                },
+                texture: sprites.get("FERRIS_BULLET_FLASH"),
+                ..default()
+            })
+            .insert(DespawnTimer::from_seconds(BULLET_FLASH_DURATION_IN_SECONDS))
+            .id();
+
+        commands.entity(ship_entity).add_child(bullet_flash);
+
+
     }
 }
 

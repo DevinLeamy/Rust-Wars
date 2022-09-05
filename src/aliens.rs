@@ -1,4 +1,3 @@
-use benimator::FrameRate;
 use bevy_tweening::{lens::TransformPositionLens, *};
 use rand::random;
 use std::time::Duration;
@@ -52,7 +51,7 @@ impl Aris {
 pub struct Zorg;
 
 impl Zorg {
-    pub const SIZE: Vec2 = Vec2::new(70.0, 70.);
+    pub const SIZE: Vec2 = Vec2::new(70.0, 60.);
     pub const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.0;
     pub const SCORE_VALUE: u32 = 20;
     pub const LAYER: f32 = 0.2;
@@ -143,7 +142,7 @@ impl Rylo {
     const SIZE: Vec2 = Vec2::new(40.0, 40.);
     pub const BULLET_SPEED: f32 = 300.0;
     const SCORE_VALUE: u32 = 10;
-    const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 15.0;
+    const MAX_SHOOTING_COOLDOWN_IN_SECONDS: f32 = 10.0;
     const POSITION_TWEEN_COMPLETE: u64 = 1;
     const POSITION_DELAY_COMPLETE: u64 = 2;
     const POSITION_TWEEN_DELAY: f32 = 10.0;

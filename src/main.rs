@@ -133,7 +133,8 @@ fn load_assets_and_animations(
     mut animations: ResMut<Animations>,
     mut sprites: ResMut<Sprites>,
 ) {
-    sprites.add("FERRIS_BULLET", asset_server.load("images/rust_white.png"));
+    sprites.add("FERRIS_BULLET", asset_server.load("images/ferris_bullet.png"));
+    sprites.add("FERRIS_BULLET_FLASH", asset_server.load("images/ferris_bullet_flash.png"));
     sprites.add("SPACE_BACKGROUND", asset_server.load("images/space.png"));
 
     let explosion_atlas = TextureAtlas::from_grid(
@@ -151,7 +152,7 @@ fn load_assets_and_animations(
     animations.add("EXPLOSION", explosion_animation);
 }
 
-fn setup(mut commands: Commands, sprites: Res<Sprites>, asset_server: Res<AssetServer>) {
+fn setup(mut commands: Commands, sprites: Res<Sprites>) {
     commands.insert_resource(Global {
         is_playing: false,
         wave: None,
@@ -223,10 +224,19 @@ fn check_gameover(ship_query: Query<&Health, With<Ship>>, game_state: Res<Curren
     }
 }
 
-fn check_wave_end(alien_query: Query<With<Alien>>, mut commands: Commands, mut global: ResMut<Global>) {
+fn check_wave_end(
+    alien_query: Query<With<Alien>>, 
+    bullet_query: Query<Entity, With<Bullet>>, 
+    mut commands: Commands, 
+    mut global: ResMut<Global>
+) {
     if alien_query.is_empty() {
+        for bullet in bullet_query.iter() {
+            commands.entity(bullet).despawn();
+        }
         global.wave_cleared();
         commands.insert_resource(NextState(GameState::LoadWaveState));
+
     }
 }
 
@@ -261,10 +271,13 @@ fn setup_load_wave(
     println!("Loading Wave: {}", global.current_wave());
     
     commands.insert_resource(LoadWaveTimer(Timer::from_seconds(
-        LOAD_WAVE_DURATION_IN_SECONDS + 3.0,
+        LOAD_WAVE_DURATION_IN_SECONDS + 2.0,
         false,
     )));
 
+    if global.current_wave() != 0 {
+        return;
+    }
     for scoreboard in scoreboard_query.iter() { 
         commands.entity(scoreboard).despawn();
     }
