@@ -12,16 +12,10 @@ impl Plugin for DebugPlugin {
         println!("Debugging enabled");
         app.add_plugin(WorldInspectorPlugin::new())
             .add_system(draw_bounding_boxes)
-            .add_system(debug_ship)
             .add_system(goto_next_wave);
     }
     #[cfg(not(feature = "debug"))]
     fn build(&self, app: &mut App) {}
-}
-
-fn debug_ship(ship_query: Query<(&Transform, &Health)>) {
-    // if let Ok((_transform, health)) = ship_query.get_single() {
-    // }
 }
 
 fn draw_bounding_boxes(mut commands: Commands, query: Query<(Entity, &Collider), Added<Collider>>) {

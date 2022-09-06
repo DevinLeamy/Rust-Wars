@@ -1,17 +1,17 @@
 use bevy::prelude::*;
 use iyes_loopless::prelude::*;
 
-use crate::{aliens::Alien, player::Ship, shared::Bullet, GameState, Global, Scoreboard};
+use crate::{aliens::Alien, shared::reset_game, GameState};
 
 #[derive(Component)]
-struct GameOverMenu;
+pub struct GameOverMenu;
 
 pub struct GameOverPlugin;
 
 impl Plugin for GameOverPlugin {
     fn build(&self, app: &mut App) {
         app.add_enter_system(GameState::GameOver, create_gameover_screen)
-            .add_exit_system(GameState::GameOver, despawn_entities)
+            .add_exit_system(GameState::GameOver, reset_game)
             .add_system(update_gameover_menu.run_in_state(GameState::GameOver));
     }
 }
@@ -72,28 +72,4 @@ fn update_gameover_menu(mut commands: Commands, keyboard_input: Res<Input<KeyCod
     }
 }
 
-fn despawn_entities(
-    mut commands: Commands,
-    ship_query: Query<Entity, With<Ship>>,
-    bullet_query: Query<Entity, With<Bullet>>,
-    menu_query: Query<Entity, With<GameOverMenu>>,
-    scoreboard_query: Query<Entity, With<Scoreboard>>,
-    mut global: ResMut<Global>
-) {
-    global.reset();
 
-    let ship = ship_query.single();
-    commands.entity(ship).despawn_recursive();
-
-    for bullet in bullet_query.iter() {
-        commands.entity(bullet).despawn();
-    }
-
-    commands.remove_resource::<Scoreboard>();
-    for scoreboard in scoreboard_query.iter() {
-        commands.entity(scoreboard).despawn();
-    }
-
-    let gameover_menu = menu_query.single();
-    commands.entity(gameover_menu).despawn();
-}

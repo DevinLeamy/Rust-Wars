@@ -381,7 +381,7 @@ impl AlienBundle {
 }
 
 fn spawn_aliens(
-    commands: Commands,
+    mut commands: Commands,
     animations: Res<Animations>,
     sprites: Res<Sprites>,
     global: Res<Global>,
@@ -391,7 +391,8 @@ fn spawn_aliens(
         1 => Wave::load_from_file("assets/waves/wave_1.txt").initialize(commands, sprites, animations),
         2 => Wave::load_from_file("assets/waves/wave_2.txt").initialize(commands, sprites, animations),
         3 => Wave::load_from_file("assets/waves/wave_3.txt").initialize(commands, sprites, animations),
-        _ => panic!("Wave not implemented"),
+        4 => commands.insert_resource(NextState(GameState::Victory)),
+        _ => panic!("Invalid Wave!")
     }
 }
 

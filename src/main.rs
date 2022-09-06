@@ -19,8 +19,11 @@ use debug::DebugPlugin;
 mod gameover;
 use gameover::GameOverPlugin;
 
-mod launch;
-use launch::MenuPlugin;
+mod menu;
+use menu::MenuPlugin;
+
+mod hall_of_fame;
+use hall_of_fame::HallOfFamePlugin;
 
 const LOAD_WAVE_DURATION_IN_SECONDS: f32 = 3.0;
 
@@ -33,13 +36,14 @@ enum GameState {
     Playing,       // Player and enemies can move and shoot
     GameOver,      // Player is frozen and enemies have been despawned (press r to restart)
     LoadWaveState, // Load enemies into the scene (player and enemies cannot shoot)
+    Victory,       // You win!
 }
 
 #[derive(Component)]
 struct Background;
 
 #[derive(Component)]
-struct Scoreboard {
+pub struct Scoreboard {
     score: u32,
 }
 
@@ -118,6 +122,7 @@ fn main() {
         .add_plugin(DebugPlugin)
         .add_plugin(MenuPlugin)
         .add_plugin(GameOverPlugin)
+        .add_plugin(HallOfFamePlugin)
         .add_plugin(PlayerPlugin)
         .add_plugin(AliensPlugin)
         .add_plugin(AnimationPlugin::default())

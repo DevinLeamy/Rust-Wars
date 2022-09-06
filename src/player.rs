@@ -9,8 +9,8 @@ const GAP_BETWEEN_SHIP_AND_FLOOR: f32 = 5.0;
 const SHIP_SPEED: f32 = 450.;
 const SHOOTING_COOLDOWN_IN_SECONDS: f32 = 1.2;
 pub const SHIP_BULLET_SIZE: Vec2 = Vec2::new(33.0, 70.0);
-pub const SHIP_BULLET_FLASH_SIZE: Vec2 = Vec2::new(33.0, 70.0); //Vec2::new(33.0, 33.0);
-pub const INITIAL_HEALTH_POINTS: u32 = 5;
+pub const SHIP_BULLET_FLASH_SIZE: Vec2 = Vec2::new(33.0, 70.0);
+pub const INITIAL_HEALTH_POINTS: u32 = 8;
 pub const SHIP_WALK_FRAME_DURATION_IN_MILLIS: u64 = 200;
 pub const HIT_MARKER_SIZE: Vec2 =  Vec2::new(25.0, 25.0); 
 pub const HIT_MARKER_DURATION: f32 = 0.75;
@@ -36,7 +36,7 @@ pub enum FerrisState {
 }
 
 #[derive(Component)]
-struct HealthDisplayHeart(u32);
+pub struct HealthDisplayHeart(u32);
 
 pub struct PlayerPlugin;
 

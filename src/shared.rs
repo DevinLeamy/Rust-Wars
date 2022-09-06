@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use rand::random;
 use std::{collections::HashMap, time::Duration};
 
-use crate::{aliens::{Rylo, Aris, Zorg}, player::SHIP_BULLET_SIZE};
+use crate::{aliens::{Rylo, Aris, Zorg}, player::{SHIP_BULLET_SIZE, Ship, HealthDisplayHeart}, Scoreboard, gameover::GameOverMenu, Global};
 
 pub const TIME_STEP: f32 = 1.0 / 60.0;
 pub const CAMERA_LEVEL: f32 = 1.0;
@@ -387,5 +387,36 @@ pub fn duration_at_most(max_time: f32) -> Duration {
 pub fn update_shooting_cooldowns(mut query: Query<&mut ShootingCooldown>) {
     for mut cooldown in query.iter_mut() {
         cooldown.tick(TIME_STEP);
+    }
+}
+
+pub fn reset_game(
+    mut commands: Commands,
+    ship_query: Query<Entity, With<Ship>>,
+    bullet_query: Query<Entity, With<Bullet>>,
+    menu_query: Query<Entity, With<GameOverMenu>>,
+    scoreboard_query: Query<Entity, With<Scoreboard>>,
+    heart_query: Query<Entity, With<HealthDisplayHeart>>,
+    mut global: ResMut<Global>
+) {
+    global.reset();
+
+    let ship = ship_query.single();
+    commands.entity(ship).despawn_recursive();
+
+    for bullet in bullet_query.iter() {
+        commands.entity(bullet).despawn();
+    }
+
+    for scoreboard in scoreboard_query.iter() {
+        commands.entity(scoreboard).despawn();
+    }
+
+    for gameover_entity in menu_query.iter() {
+        commands.entity(gameover_entity).despawn();
+    }
+    
+    for heart_entity in heart_query.iter() {
+        commands.entity(heart_entity).despawn();
     }
 }
