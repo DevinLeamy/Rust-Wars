@@ -1,5 +1,5 @@
 [package]
-name = "Turbo"
+name = "Rust-Wars"
 version = "0.1.0"
 publish = false
 authors = ["Devin Leamy"] 

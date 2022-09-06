@@ -276,8 +276,6 @@ fn setup_load_wave(
     asset_server: Res<AssetServer>,
     scoreboard_query: Query<Entity, With<Scoreboard>>
 ) {
-    println!("Loading Wave: {}", global.current_wave());
-    
     commands.insert_resource(LoadWaveTimer(Timer::from_seconds(
         LOAD_WAVE_DURATION_IN_SECONDS + 2.0,
         false,
@@ -327,7 +325,6 @@ fn update_load_wave(mut commands: Commands, mut timer: ResMut<LoadWaveTimer>) {
     timer.tick(Duration::from_secs_f32(TIME_STEP));
 
     if timer.finished() {
-        println!("Starting Wave");
         commands.insert_resource(NextState(GameState::Playing));
     }
 }
