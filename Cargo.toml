@@ -9,7 +9,7 @@ edition = "2021"
 debug = []
 
 [dependencies]
-bevy = { version = "0.8.1" } #//, features = ["dynamic"] } 
+bevy = { version = "0.8.1" }
 rand = "0.8.3"
 benimator = "4.0.0-rc.1"
 iyes_loopless = "0.7.1"
