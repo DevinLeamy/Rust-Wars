@@ -1,7 +1,6 @@
 target/
 target/
 .DS_Store
-build/
 dist/
 Notes.md
 .env
