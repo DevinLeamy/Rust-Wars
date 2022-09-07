@@ -8,7 +8,7 @@ mod player;
 use player::{PlayerPlugin, Ship};
 
 mod aliens;
-use aliens::{Alien, AliensPlugin, Wave};
+use aliens::{Alien, AliensPlugin};
 
 mod shared;
 use shared::*;
@@ -24,6 +24,8 @@ use menu::MenuPlugin;
 
 mod hall_of_fame;
 use hall_of_fame::HallOfFamePlugin;
+
+mod waves;
 
 const LOAD_WAVE_DURATION_IN_SECONDS: f32 = 3.0;
 
@@ -86,7 +88,8 @@ impl Global {
 }
 
 fn main() {
-    let _wave = Wave::load_from_file("assets/waves/wave_1.txt");
+    console_error_panic_hook::set_once();
+
     let mut fixedupdate = SystemStage::parallel();
     fixedupdate.add_system(update_bullets.run_in_state(GameState::Playing));
     fixedupdate.add_system(check_gameover.run_in_state(GameState::Playing));
@@ -100,7 +103,8 @@ fn main() {
             width: WINDOW_WIDTH,
             height: WINDOW_HEIGHT,
             resizable: false,
-            position: WindowPosition::Centered(MonitorSelection::Number(0)),
+            // position: WindowPosition::Centered(MonitorSelection::Number(0)),
+            canvas: Some("#bevy".to_owned()),
             ..default()
         })
         .add_loopless_state(GameState::Menu)
