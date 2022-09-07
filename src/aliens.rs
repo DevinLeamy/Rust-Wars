@@ -537,12 +537,11 @@ pub struct Wave {
 }
 
 impl Wave {
+    // p.s. they "used" to be loaded from a file
     pub fn load_from_file(path: &str) -> Wave {
-        let wave_data = std::fs::read_to_string(path).expect("Wave file not found!");
-        let lines: Vec<&str> = wave_data.split_whitespace().collect();
+        let lines = Wave::get_data(path);
         
         let mut layout = vec![vec![' '; lines[0].len()]; lines.len()];
-
         for (i, line) in lines.iter().enumerate() {
             let line: Vec<char> = line.as_bytes().iter().map(|c| c.to_ascii_lowercase() as char).collect();
             for j in 0..line.len() as usize {
